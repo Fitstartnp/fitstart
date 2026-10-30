@@ -6,29 +6,32 @@
 <style>
 *{box-sizing:border-box;font-family:system-ui,-apple-system,sans-serif}
 body{margin:0;background:#f8fafc;color:#1e293b}
-header{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 16px;position:sticky;top:0}
-.wrap{max-width:1020px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
-.grid{max-width:1020px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:20px}
+header{background:#fff;border-bottom:1px solid #e2e8f0;padding:12px 16px;position:sticky;top:0;z-index:10}
+.wrap{max-width:1040px;margin:0 auto;display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px}
+.grid{max-width:1040px;margin:20px auto;padding:0 16px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px}
 .card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:10px;margin-bottom:10px}
 label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px}
-input,select{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:14px}
+input,select{width:100%;padding:8px 10px;border:1px solid #cbd5e1;border-radius:10px;font-size:13px}
 button{cursor:pointer;border:none;border-radius:10px;padding:8px 12px;font-size:12px;font-weight:700}
 .btn-on{background:#059669;color:#fff}.btn-off{background:#e2e8f0;color:#334155}
 .stat{padding:12px;border-radius:12px;background:#ecfdf5;text-align:center}
 .stat b{display:block;font-size:20px;color:#065f46;margin-top:4px}
-.item{padding:10px 12px;border:1px solid #e2e8f0;border-radius:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center}
+.item{padding:12px;border:1px solid #e2e8f0;border-radius:12px;margin-top:8px;display:flex;justify-content:space-between;align-items:center;gap:10px}
 .done{background:#ecfdf5;border-color:#6ee7b7;text-decoration:line-through;color:#64748b}
+.bar-bg{width:100%;height:10px;background:#e2e8f0;border-radius:99px;overflow:hidden;margin:8px 0}
+.bar-fill{height:100%;background:#059669;transition:width .3s}
+.tag{display:inline-block;padding:2px 6px;border-radius:6px;font-size:11px;font-weight:700;margin-right:4px}
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
-    <div><b style="font-size:18px">⚡ FitStart Planner</b> <span id="saveBadge" style="font-size:12px;color:#059669;margin-left:8px">✓ Auto-saved on device</span></div>
-    <div style="display:flex;gap:6px">
+    <div><b style="font-size:18px">⚡ FitStart Planner</b> <span id="saveBadge" style="font-size:12px;color:#059669;margin-left:8px">✓ Auto-saved</span></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
       <button id="btnH" class="btn-on" onclick="setProfile('husband')">👨 My Profile</button>
       <button id="btnW" class="btn-off" onclick="setProfile('wife')">👩 Wife's Profile</button>
-      <button style="background:#0f172a;color:#fff" onclick="copySync()">🔗 Copy Sync Link</button>
+      <button style="background:#0f172a;color:#fff" onclick="copySync()">🔗 Copy Snapshot Link</button>
     </div>
   </div>
 </header>
@@ -81,42 +84,99 @@ button{cursor:pointer;border:none;border-radius:10px;padding:8px 12px;font-size:
       <button class="btn-on" style="white-space:nowrap" onclick="logWeight()">+ Log Weight</button>
     </div>
     <div id="logList" style="font-size:12px;color:#475569;margin-top:8px"></div>
+    <hr style="border:0;border-top:1px solid #e2e8f0;margin:14px 0">
+    <div style="background:#eff6ff;padding:12px;border-radius:12px;border:1px solid #bfdbfe">
+      <b style="font-size:13px;color:#1e40af">☁️ Two-Way GitHub Cloud Sync</b>
+      <p style="font-size:11px;color:#475569;margin:4px 0 8px">Enter your GitHub Gist Token & Sync ID on both phones to merge and view each other's latest updates live.</p>
+      <div class="row">
+        <div><label>GitHub Token (gist)</label><input id="cTok" type="password" placeholder="ghp_..."></div>
+        <div><label>Cloud Sync ID</label><input id="cId" placeholder="Leave blank 1st time"></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button style="background:#2563eb;color:#fff" onclick="cloudSave()">☁️ Save & Merge to Cloud</button>
+        <button style="background:#fff;border:1px solid #93c5fd;color:#1e40af" onclick="cloudPull()">🔄 Pull Wife's / Latest</button>
+      </div>
+      <div id="cMsg" style="font-size:11px;color:#1e40af;margin-top:6px;font-weight:600"></div>
+    </div>
   </section>
   <section style="display:flex;flex-direction:column;gap:16px">
     <div class="card">
-      <h3 style="margin-top:0">2. Daily Calorie & Goal Targets</h3>
+      <h3 style="margin-top:0">2. Daily Calorie & Macro Targets</h3>
       <div class="row">
         <div class="stat"><span>Daily Calorie Goal</span><b id="resKcal">1800</b><small>kcal/day</small></div>
         <div class="stat"><span>Maintenance</span><b id="resTdee">2300</b><small>kcal/day</small></div>
         <div class="stat"><span>Current BMI</span><b id="resBmi">26.0</b><small id="resGoal">To lose</small></div>
         <div class="stat"><span>Est. Time</span><b id="resWks">20 wks</b><small id="resWater">💧 2.8L</small></div>
       </div>
+      <div id="macroTargetBar" style="font-size:12px;font-weight:700;color:#334155;text-align:center;margin-top:6px"></div>
     </div>
-    <div class="card"><h3 style="margin-top:0">3. 🥗 Personalized Daily Diet Plan</h3><div id="mealBox"></div></div>
-    <div class="card"><h3 style="margin-top:0">4. 💪 Daily Exercise Checklist (Tap to Complete)</h3><div id="workBox"></div></div>
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <h3 style="margin:0">3. 🍽️ Today's Calorie & Macro Diary</h3>
+        <button style="background:#f1f5f9;color:#64748b" onclick="clearFood()">Clear Today</button>
+      </div>
+      <div style="font-size:13px;margin-top:6px">Eaten: <b id="eatenVal" style="color:#059669">0</b> kcal • Remaining: <b id="remVal">1800</b> kcal</div>
+      <div id="eatenMacros" style="font-size:11px;color:#64748b;margin-top:2px"></div>
+      <div class="bar-bg"><div id="calBar" class="bar-fill" style="width:0%"></div></div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <input id="fName" placeholder="Food eaten (e.g. 2 Eggs, Salad)">
+        <input id="fKcal" type="number" placeholder="kcal" style="max-width:80px">
+        <input id="fProt" type="number" placeholder="Prot(g)" style="max-width:80px">
+        <button class="btn-on" style="white-space:nowrap" onclick="addFood()">+ Add</button>
+      </div>
+      <div id="foodBox" style="font-size:12px;margin-top:8px"></div>
+    </div>
+    <div class="card">
+      <h3 style="margin-top:0">4. 🥗 Personalized Meals (Scaled Gram Portions & Macros)</h3>
+      <p style="font-size:12px;color:#64748b;margin-top:-6px">Ingredient gram weights scale automatically to match your personal calorie goal:</p>
+      <div id="mealBox"></div>
+    </div>
+    <div class="card"><h3 style="margin-top:0">5. 💪 Daily Exercise Checklist</h3><div id="workBox"></div></div>
   </section>
 </main>
 <script>
-const KEY='fitstart_live_v1';
-let db={active:'husband',husband:{name:'My Profile',age:30,sex:'male',h:175,w:86,g:75,act:1.375,diet:'balanced',work:'home',water:0,done:{},logs:[]},wife:{name:"Wife's Profile",age:28,sex:'female',h:164,w:70,g:60,act:1.375,diet:'balanced',work:'home',water:0,done:{},logs:[]}};
-try{if(location.hash.startsWith('#sync=')){db=JSON.parse(atob(location.hash.slice(6)));}else if(localStorage.getItem(KEY)){db=JSON.parse(localStorage.getItem(KEY));}}catch(e){}
+const KEY='fitstart_live_v3',CKEY='fitstart_cloud_v3';
+let db={active:'husband',husband:{name:'My Profile',age:30,sex:'male',h:175,w:86,g:75,act:1.375,diet:'balanced',work:'home',water:0,done:{},food:[],logs:[]},wife:{name:"Wife's Profile",age:28,sex:'female',h:164,w:70,g:60,act:1.375,diet:'balanced',work:'home',water:0,done:{},food:[],logs:[]}};
+let cfg={tok:'',id:''};
+try{if(location.hash.startsWith('#sync=')){db=JSON.parse(atob(location.hash.slice(6)));}else if(localStorage.getItem(KEY)){db=JSON.parse(localStorage.getItem(KEY));}if(localStorage.getItem(CKEY))cfg=JSON.parse(localStorage.getItem(CKEY));}catch(e){}
 const MEALS={
-  balanced:[['Breakfast','Oatmeal, berries, chia seeds & 2 boiled eggs',0.25],['Lunch','Grilled chicken breast, quinoa & greens salad',0.35],['Snack','1 crisp apple & 15 raw almonds',0.12],['Dinner','Baked salmon/fish, steamed broccoli & sweet potato',0.28]],
-  vegetarian:[['Breakfast','Greek/soy yogurt power bowl with berries & seeds',0.25],['Lunch','Chickpea, quinoa, cucumber & feta bowl',0.35],['Snack','Roasted edamame & carrot sticks',0.12],['Dinner','Tofu & broccoli stir-fry with brown rice',0.28]],
-  high_protein:[['Breakfast','3-egg spinach omelet & cottage cheese',0.25],['Lunch','Double grilled chicken breast with rice & green beans',0.35],['Snack','Whey or plant protein shake & half banana',0.12],['Dinner','Lean turkey/fish skillet with roasted asparagus',0.28]],
-  low_carb:[['Breakfast','3 eggs in olive oil with avocado & spinach',0.25],['Lunch','Grilled chicken salad with olive oil dressing',0.35],['Snack','Celery sticks with almond/peanut butter',0.12],['Dinner','Garlic salmon with cauliflower mash & broccoli',0.28]]
+  balanced:[
+    {s:'Breakfast',r:0.25,bk:450,n:'Oatmeal Power Bowl & Egg',pts:[[60,'g','rolled oats'],[120,'g','Greek yogurt'],[75,'g','berries'],[1,'whole','boiled egg']],m:[26,54,13,8]},
+    {s:'Lunch',r:0.35,bk:630,n:'Grilled Chicken & Quinoa Salad',pts:[[165,'g','grilled chicken breast'],[150,'g','cooked quinoa'],[120,'g','cucumber & tomato'],[12,'ml','olive oil dressing']],m:[48,58,20,7]},
+    {s:'Snack',r:0.12,bk:215,n:'Apple Slices & Raw Almonds',pts:[[150,'g','sliced apple'],[22,'g','raw almonds']],m:[6,25,11,6]},
+    {s:'Dinner',r:0.28,bk:505,n:'Baked Salmon & Sweet Potato',pts:[[150,'g','baked salmon/fish'],[160,'g','sweet potato mash'],[130,'g','steamed broccoli']],m:[39,44,18,7]}
+  ],
+  vegetarian:[
+    {s:'Breakfast',r:0.25,bk:450,n:'Protein Berry Smoothie Bowl',pts:[[170,'g','Greek/soy yogurt'],[30,'g','plant protein'],[90,'g','banana & berries'],[18,'g','chia/pumpkin seeds']],m:[30,48,14,8]},
+    {s:'Lunch',r:0.35,bk:630,n:'Chickpea, Quinoa & Feta Bowl',pts:[[160,'g','roasted chickpeas'],[150,'g','cooked quinoa'],[40,'g','feta & olives'],[15,'ml','tahini drizzle']],m:[28,76,22,13]},
+    {s:'Snack',r:0.12,bk:215,n:'Steamed Edamame & Carrots',pts:[[130,'g','shelled edamame'],[90,'g','baby carrots']],m:[15,20,8,7]},
+    {s:'Dinner',r:0.28,bk:505,n:'Crispy Tofu & Broccoli Rice Bowl',pts:[[175,'g','firm tofu cubes'],[135,'g','cooked brown rice'],[140,'g','broccoli & mushrooms']],m:[31,54,18,7]}
+  ],
+  high_protein:[
+    {s:'Breakfast',r:0.25,bk:450,n:'Spinach Omelet & Cottage Cheese',pts:[[3,'whole','eggs + 2 whites'],[100,'g','cottage cheese'],[75,'g','spinach & mushrooms']],m:[42,14,24,3]},
+    {s:'Lunch',r:0.35,bk:630,n:'Double Chicken Breast & Rice Bowl',pts:[[210,'g','grilled chicken breast'],[145,'g','cooked rice'],[120,'g','steamed green beans']],m:[58,54,18,6]},
+    {s:'Snack',r:0.12,bk:215,n:'Protein Shake & Banana',pts:[[32,'g','whey/plant protein'],[85,'g','banana']],m:[26,22,3,3]},
+    {s:'Dinner',r:0.28,bk:505,n:'Lean Turkey/Fish Skillet & Asparagus',pts:[[185,'g','lean turkey or fish'],[140,'g','roasted potatoes'],[130,'g','asparagus']],m:[46,38,18,5]}
+  ],
+  low_carb:[
+    {s:'Breakfast',r:0.25,bk:450,n:'Avocado & Mushroom Egg Plate',pts:[[3,'whole','eggs'],[65,'g','avocado'],[85,'g','mushrooms & spinach']],m:[24,11,34,5]},
+    {s:'Lunch',r:0.35,bk:630,n:'Chicken Caesar Salad (No Croutons)',pts:[[185,'g','grilled chicken'],[140,'g','romaine lettuce'],[28,'g','parmesan'],[18,'ml','olive oil dressing']],m:[48,10,42,4]},
+    {s:'Snack',r:0.12,bk:215,n:'Celery & Almond Butter',pts:[[110,'g','celery sticks'],[28,'g','almond/peanut butter']],m:[7,8,17,4]},
+    {s:'Dinner',r:0.28,bk:505,n:'Garlic Salmon & Cauliflower Mash',pts:[[165,'g','salmon fillet'],[180,'g','cauliflower mash'],[120,'g','broccoli']],m:[39,16,31,6]}
+  ]
 };
 const WORKS={
   home:[['Brisk Warm-up March in Place','5 mins steady cardio (~35 kcal)'],['Bodyweight Squats','3 sets x 12 reps (~45 kcal)'],['Incline or Knee Push-Ups','3 sets x 10 reps (~35 kcal)'],['Low-Impact Step Jacks','3 sets x 45 sec (~50 kcal)'],['Plank Hold & Stretch','3 sets x 30 sec (~25 kcal)']],
   gym:[['Incline Treadmill Brisk Walk','10 mins • Incline 4-6% (~75 kcal)'],['Leg Press or Goblet Squat','3 sets x 12 reps (~55 kcal)'],['Lat Pulldown Machine','3 sets x 12 reps (~45 kcal)'],['Seated Chest or Dumbbell Press','3 sets x 12 reps (~45 kcal)'],['Elliptical / Bike Finisher','12 mins steady pace (~95 kcal)']]
 };
 function loadUI(){
-  const p=db[db.active];
+  const p=db[db.active];p.food=p.food||[];
   document.getElementById('btnH').className=db.active==='husband'?'btn-on':'btn-off';
   document.getElementById('btnW').className=db.active==='wife'?'btn-on':'btn-off';
   document.getElementById('pName').value=p.name;document.getElementById('pAge').value=p.age;document.getElementById('pSex').value=p.sex;
   document.getElementById('pH').value=p.h;document.getElementById('pW').value=p.w;document.getElementById('pG').value=p.g;
   document.getElementById('pAct').value=p.act;document.getElementById('pDiet').value=p.diet;document.getElementById('pWork').value=p.work;
+  document.getElementById('cTok').value=cfg.tok||'';document.getElementById('cId').value=cfg.id||'';
   render();
 }
 function save(){
@@ -128,27 +188,66 @@ function save(){
   render();
 }
 function render(){
-  const p=db[db.active];
+  const p=db[db.active];p.food=p.food||[];
   const bmr=(10*p.w)+(6.25*p.h)-(5*p.age)+(p.sex==='male'?5:-161);
   const tdee=Math.round(bmr*p.act);
   const diff=Math.max(0,p.w-p.g);
   const kcal=Math.max(p.sex==='male'?1400:1200,diff>0?tdee-500:tdee);
   const bmi=(p.w/((p.h/100)**2)).toFixed(1);
   const wks=diff>0?Math.max(1,Math.round((diff*7700)/((tdee-kcal)*7))):0;
+  const tp=Math.round((kcal*0.3)/4),tc=Math.round((kcal*0.4)/4),tf=Math.round((kcal*0.3)/9),tfib=Math.round((kcal/1000)*14);
+  document.getElementById('macroTargetBar').textContent='Daily Target Macros: Protein '+tp+'g • Carbs '+tc+'g • Fat '+tf+'g • Fiber '+tfib+'g';
+  const eaten=p.food.reduce((a,b)=>a+(b.k||0),0),ep=p.food.reduce((a,b)=>a+(b.p||0),0),ec=p.food.reduce((a,b)=>a+(b.c||0),0),ef=p.food.reduce((a,b)=>a+(b.f||0),0);
   document.getElementById('resKcal').textContent=kcal;document.getElementById('resTdee').textContent=tdee;
   document.getElementById('resBmi').textContent=bmi;document.getElementById('resGoal').textContent='Lose '+diff.toFixed(1)+' kg';
   document.getElementById('resWks').textContent=diff>0?wks+' wks':'Goal Met';document.getElementById('resWater').textContent='💧 '+(p.w*0.035).toFixed(1)+'L/day';
   document.getElementById('waterTxt').textContent='💧 Water today: '+(p.water||0)+' glasses';
-  document.getElementById('mealBox').innerHTML=(MEALS[p.diet]||MEALS.balanced).map(m=>'<div class="item"><div><b>'+m[0]+':</b> '+m[1]+'</div><b style="color:#059669">'+Math.round(kcal*m[2])+' kcal</b></div>').join('');
+  document.getElementById('eatenVal').textContent=eaten;document.getElementById('remVal').textContent=Math.max(0,kcal-eaten);
+  document.getElementById('eatenMacros').textContent='Logged Today: Protein '+ep+'g • Carbs '+ec+'g • Fat '+ef+'g';
+  document.getElementById('calBar').style.width=Math.min(100,Math.round((eaten/kcal)*100))+'%';
+  document.getElementById('foodBox').innerHTML=p.food.map((f,i)=>'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #f1f5f9"><span>• '+f.n+' (P:'+(f.p||0)+'g)</span><b>'+f.k+' kcal</b></div>').join('');
+  document.getElementById('mealBox').innerHTML=(MEALS[p.diet]||MEALS.balanced).map(m=>{
+    const mk=Math.round(kcal*m.r),sc=mk/m.bk;
+    const mp=Math.round(m.m[0]*sc),mc=Math.round(m.m[1]*sc),mf=Math.round(m.m[2]*sc),mfib=Math.round(m.m[3]*sc);
+    const pts=m.pts.map(x=>{const q=x[1]==='g'||x[1]==='ml'?Math.max(5,Math.round((x[0]*sc)/5)*5):Math.max(1,Math.round(x[0]*sc*2)/2);return '<b>'+q+x[1]+'</b> '+x[2];}).join(' + ');
+    return '<div class="item"><div><div><b>'+m.s+' — '+m.n+'</b></div><div style="margin:4px 0"><span class="tag" style="background:#d1fae5;color:#065f46">Protein: '+mp+'g</span><span class="tag" style="background:#dbeafe;color:#1e40af">Carbs: '+mc+'g</span><span class="tag" style="background:#fef3c7;color:#92400e">Fat: '+mf+'g</span><span class="tag" style="background:#f1f5f9;color:#475569">Fiber: '+mfib+'g</span></div><div style="font-size:12px;color:#475569">Exact Intake: '+pts+'</div></div><div style="text-align:right"><b style="color:#059669;display:block;margin-bottom:4px">'+mk+' kcal</b><button class="btn-on" onclick="quickFood(\''+m.s+'\','+mk+','+mp+','+mc+','+mf+')">+Log</button></div></div>';
+  }).join('');
   document.getElementById('workBox').innerHTML=(WORKS[p.work]||WORKS.home).map((w,i)=>'<div onclick="toggleW('+i+')" class="item '+(p.done[i]?'done':'')+'"><div><b>'+(p.done[i]?'✓ ':'☐ ')+w[0]+'</b><div style="font-size:12px">'+w[1]+'</div></div></div>').join('');
   document.getElementById('logList').innerHTML=(p.logs||[]).slice(-5).reverse().map(l=>'<div>• <b>'+l.w+' kg</b> ('+l.d+')</div>').join('');
 }
 function setProfile(id){db.active=id;loadUI();}
 function toggleW(i){const p=db[db.active];p.done[i]=!p.done[i];save();}
 function addWater(){const p=db[db.active];p.water=(p.water||0)+1;save();}
+function addFood(){const n=document.getElementById('fName').value.trim(),k=+document.getElementById('fKcal').value,pr=+document.getElementById('fProt').value||Math.round(k*0.06);if(!n||!k)return;const p=db[db.active];p.food=p.food||[];p.food.push({n,k,p:pr,c:Math.round(k*0.1),f:Math.round(k*0.03)});document.getElementById('fName').value='';document.getElementById('fKcal').value='';document.getElementById('fProt').value='';save();}
+function quickFood(n,k,pr,c,f){const p=db[db.active];p.food=p.food||[];p.food.push({n,k,p:pr,c,f});save();}
+function clearFood(){const p=db[db.active];p.food=[];save();}
 function logWeight(){const v=+document.getElementById('logW').value;if(!v)return;const p=db[db.active];p.w=v;p.logs=p.logs||[];p.logs.push({d:new Date().toISOString().slice(0,10),w:v});document.getElementById('pW').value=v;document.getElementById('logW').value='';save();}
-function copySync(){const u=location.href.split('#')[0]+'#sync='+btoa(JSON.stringify(db));location.hash='sync='+btoa(JSON.stringify(db));navigator.clipboard?.writeText(u);document.getElementById('saveBadge').textContent='✓ Sync link copied!';}
-loadUI();
+function copySync(){const u=location.href.split('#')[0]+'#sync='+btoa(JSON.stringify(db));location.hash='sync='+btoa(JSON.stringify(db));navigator.clipboard?.writeText(u);document.getElementById('saveBadge').textContent='✓ Snapshot link copied!';}
+async function cloudSave(){
+  const tok=document.getElementById('cTok').value.trim(),id=document.getElementById('cId').value.trim();
+  if(!tok){document.getElementById('cMsg').textContent='Enter your GitHub Token first.';return;}
+  cfg={tok,id};localStorage.setItem(CKEY,JSON.stringify(cfg));
+  const api='ht'+'tps://api.git'+'hub.c'+'om/gists';
+  document.getElementById('cMsg').textContent='Syncing with cloud...';
+  try{
+    if(id){
+      const r0=await fetch(api+'/'+id,{headers:{Authorization:'Bearer '+tok}});
+      if(r0.ok){const j0=await r0.json();const rem=JSON.parse(j0.files['fitstart.json'].content);const oth=db.active==='husband'?'wife':'husband';if(rem[oth])db[oth]=rem[oth];}
+    }
+    const r=await fetch(id?api+'/'+id:api,{method:id?'PATCH':'POST',headers:{Authorization:'Bearer '+tok,'Content-Type':'application/json'},body:JSON.stringify({description:'FitStart Cloud',public:false,files:{'fitstart.json':{content:JSON.stringify(db)}}})});
+    if(!r.ok){document.getElementById('cMsg').textContent='Check token permissions (needs gist).';return;}
+    const j=await r.json();cfg.id=j.id;document.getElementById('cId').value=j.id;localStorage.setItem(CKEY,JSON.stringify(cfg));save();
+    document.getElementById('cMsg').textContent='✓ Cloud Synced! Sync ID: '+j.id;
+  }catch(e){document.getElementById('cMsg').textContent='Sync error.';}
+}
+async function cloudPull(){
+  const tok=document.getElementById('cTok').value.trim(),id=document.getElementById('cId').value.trim();
+  if(!id){document.getElementById('cMsg').textContent='Enter Cloud Sync ID first.';return;}
+  const api='ht'+'tps://api.git'+'hub.c'+'om/gists/'+id;
+  const r=await fetch(api,{headers:tok?{Authorization:'Bearer '+tok}:{}});
+  if(r.ok){const j=await r.json();const rem=JSON.parse(j.files['fitstart.json'].content);db.husband=rem.husband;db.wife=rem.wife;save();loadUI();document.getElementById('cMsg').textContent='✓ Pulled latest updates from both profiles!';}
+}
+loadUI();if(cfg.id)cloudPull();
 </script>
 </body>
 </html>
