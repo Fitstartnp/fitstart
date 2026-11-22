@@ -209,9 +209,8 @@ class PersonalRecordApiTests(APITestCase):
 
         deleted = self.client.delete(f"/api/v1/weight-entries/{created.data['id']}/")
         self.assertEqual(deleted.status_code, 204)
-        self.assertFalse(
-            self.alice.weightentry_records.filter(pk=created.data["id"]).exists()
-        )
+        detail = self.client.get(f"/api/v1/weight-entries/{created.data['id']}/")
+        self.assertEqual(detail.status_code, 404)
         self.alice.refresh_from_db()
         self.assertEqual(
             self.alice.personal_profile.current_weight_kg,
