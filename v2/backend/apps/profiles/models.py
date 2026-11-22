@@ -52,6 +52,18 @@ class PersonalProfile(models.Model):
         choices=(("beginner", "Beginner"), ("intermediate", "Intermediate"), ("advanced", "Advanced")),
         default="beginner",
     )
+    # V1-compatible planner state retained per account during migration.
+    meal_variation_index = models.PositiveSmallIntegerField(default=0)
+    slot_offsets = models.JSONField(default=dict, blank=True)
+    workout_variation_index = models.PositiveSmallIntegerField(default=0)
+    exercise_offsets = models.JSONField(default=dict, blank=True)
+    completed_exercises = models.JSONField(default=dict, blank=True)
+    streak_count = models.PositiveIntegerField(default=1)
+    last_active_date = models.DateField(null=True, blank=True)
+    fasting_protocol_hours = models.PositiveSmallIntegerField(default=16)
+    fasting_is_active = models.BooleanField(default=False)
+    fasting_elapsed_minutes = models.PositiveSmallIntegerField(default=0)
+    legacy_favorite_recipe_names = models.JSONField(default=list, blank=True)
     unit_system = models.CharField(max_length=10, choices=UnitSystem.choices, default=UnitSystem.METRIC)
     timezone_name = models.CharField(max_length=64, default="Europe/Berlin")
     created_at = models.DateTimeField(auto_now_add=True)
