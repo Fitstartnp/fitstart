@@ -166,6 +166,9 @@ SECURE_HSTS_SECONDS = int(os.environ.get("DJANGO_HSTS_SECONDS", "0"))
 SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 SECURE_HSTS_PRELOAD = False
 
+if not os.environ.get("EMAIL_HOST") and not DEBUG:
+    raise RuntimeError("EMAIL_HOST must be configured in production; console email would expose invitation links in logs.")
+
 EMAIL_BACKEND = (
     "django.core.mail.backends.smtp.EmailBackend"
     if os.environ.get("EMAIL_HOST")
