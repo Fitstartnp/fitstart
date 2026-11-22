@@ -25,6 +25,10 @@ class PersonalProfile(models.Model):
     share_weight_history = models.BooleanField(default=False)
     share_body_measurements = models.BooleanField(default=False)
     share_food_diary = models.BooleanField(default=False)
+    share_water_logs = models.BooleanField(default=False)
+    share_workout_history = models.BooleanField(default=False)
+    share_fasting_sessions = models.BooleanField(default=False)
+    share_goals = models.BooleanField(default=False)
 
     def __str__(self) -> str:
         return self.display_name or self.user.email
