@@ -115,7 +115,17 @@
           <div class="form-actions"><button class="btn" type="submit">Create grocery list</button></div>
         </form>
         <div id="groceryStatus" class="status" aria-live="polite"></div><div id="groceryTable"></div>
-        <p class="section-note">Adding and checking individual grocery items will be enabled in the next API slice.</p>
+        <form id="groceryItemForm" data-status="groceryItemStatus" class="mt-3">
+          <div class="form-grid">
+            <div class="field"><label for="groceryParentList">List</label><select id="groceryParentList" name="grocery_list" required></select></div>
+            <div class="field"><label for="groceryItemName">Item</label><input id="groceryItemName" name="name" maxlength="180" required></div>
+            <div class="field"><label for="groceryItemQuantity">Quantity</label><input id="groceryItemQuantity" name="quantity" maxlength="80" placeholder="e.g. 2 packs"></div>
+            <div class="field"><label for="groceryItemCategory">Category</label><input id="groceryItemCategory" name="category" maxlength="80" placeholder="Produce, dairy…"></div>
+          </div>
+          <div class="form-actions"><button id="groceryItemButton" class="btn" type="submit">Add grocery item</button></div>
+        </form>
+        <div id="groceryItemStatus" class="status" aria-live="polite"></div>
+        <div id="groceryItemTable"></div>
       </section>
 
       <section class="panel">
@@ -142,6 +152,20 @@
           <div class="form-actions"><button class="btn" type="submit">Save workout</button></div>
         </form>
         <div id="workoutStatus" class="status" aria-live="polite"></div><div id="workoutTable"></div>
+        <form id="workoutSetForm" data-status="workoutSetStatus" class="mt-3">
+          <div class="form-grid">
+            <div class="field wide"><label for="workoutParentSession">Workout session</label><select id="workoutParentSession" name="session" required></select></div>
+            <div class="field"><label for="exerciseKey">Exercise key</label><input id="exerciseKey" name="exercise_key" maxlength="100" placeholder="e.g. squat" required></div>
+            <div class="field"><label for="exerciseName">Exercise name</label><input id="exerciseName" name="exercise_name" maxlength="180" required></div>
+            <div class="field"><label for="setNumber">Set number</label><input id="setNumber" name="set_number" type="number" min="1" max="99" step="1" required></div>
+            <div class="field"><label for="setReps">Reps</label><input id="setReps" name="reps" type="number" min="0" max="999" step="1"></div>
+            <div class="field"><label for="setWeight">Load (kg)</label><input id="setWeight" name="weight_kg" type="number" min="0" max="9999" step="0.01"></div>
+            <div class="field"><label for="setDuration">Duration (sec)</label><input id="setDuration" name="duration_seconds" type="number" min="0" max="86400" step="1"></div>
+          </div>
+          <div class="form-actions"><button id="workoutSetButton" class="btn" type="submit">Log exercise set</button></div>
+        </form>
+        <div id="workoutSetStatus" class="status" aria-live="polite"></div>
+        <div id="workoutSetTable"></div>
       </section>
       <section class="panel">
         <h2>Goals</h2>
