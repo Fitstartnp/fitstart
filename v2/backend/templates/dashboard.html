@@ -23,6 +23,21 @@
       <div><h1>Your FitStart space</h1><p>Your records are private unless you choose to share a category with a household.</p></div>
       <span class="pill">Private beta</span>
     </div>
+    <section class="panel full" id="nutritionTargetsPanel">
+      <h2>Estimated daily energy & nutrition targets</h2>
+      <p class="section-note">These follow the V1 FitStart formulas and are informational estimates, not medical advice. They use your current profile settings.</p>
+      <div class="summary">
+        <div class="metric"><span>Basal metabolic rate (BMR)</span><strong id="bmrEstimate">—</strong></div>
+        <div class="metric"><span>Daily energy needs (TDEE)</span><strong id="tdeeEstimate">—</strong></div>
+        <div class="metric"><span>Calorie target</span><strong id="calorieTargetEstimate">—</strong></div>
+        <div class="metric"><span>Body mass index (BMI)</span><strong id="bmiEstimate">—</strong></div>
+      </div>
+      <p id="goalTimelineEstimate" class="section-note"></p>
+      <h3>Today's logged progress against targets</h3>
+      <div id="nutritionProgress" class="progress-list"></div>
+      <p id="waterTargetNote" class="section-note"></p>
+    </section>
+
     <section class="summary" aria-label="Your activity summary">
       <div class="metric"><span>Weight entries</span><strong id="weightCount">0</strong></div>
       <div class="metric"><span>Food entries</span><strong id="foodCount">0</strong></div>
