@@ -37,6 +37,8 @@ class DashboardRenderTests(TestCase):
         self.assertContains(response, "routineResults")
         self.assertContains(response, "recipeDiet")
         self.assertContains(response, "profileAge")
+        self.assertContains(response, "nutritionTargetsPanel")
+        self.assertContains(response, "nutritionProgress")
         self.assertContains(response, "fitstart/app.js")
         self.assertContains(response, "fitstart/app.css")
 
