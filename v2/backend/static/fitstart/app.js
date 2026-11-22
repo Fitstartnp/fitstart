@@ -771,6 +771,42 @@
     }
   });
 
+  $("exportDataButton").addEventListener("click", async () => {
+    const button = $("exportDataButton");
+    button.disabled = true;
+    showStatus("exportStatus", "Preparing your private data export…");
+    try {
+      const response = await fetch("/api/v1/export/", {
+        method: "GET",
+        credentials: "same-origin",
+        headers: { Accept: "application/json" }
+      });
+      if (!response.ok) {
+        let message = "Export failed (" + response.status + ").";
+        try {
+          const errorBody = await response.json();
+          if (errorBody.detail) message = errorBody.detail;
+        } catch (_) {}
+        throw new Error(message);
+      }
+      const data = await response.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "fitstart-v2-export.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      showStatus("exportStatus", "Your personal data export was downloaded. Keep the file private.", "success");
+    } catch (error) {
+      showStatus("exportStatus", error.message, "error");
+    } finally {
+      button.disabled = false;
+    }
+  });
+
   document.querySelectorAll("[data-scroll]").forEach((button) => {
     button.addEventListener("click", () => {
       const target = $(button.dataset.scroll);
