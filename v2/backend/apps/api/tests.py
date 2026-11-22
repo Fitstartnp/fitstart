@@ -751,3 +751,67 @@ class MyDataExportApiTests(APITestCase):
         self.assertNotIn("cloudConfig", serialized)
         self.assertNotIn("gist_token", serialized.lower())
         self.assertNotIn("password", serialized.lower())
+
+
+class CatalogApiTests(APITestCase):
+    @classmethod
+    def setUpTestData(cls):
+        from django.core.management import call_command
+        call_command("import_v1_catalog")
+
+    def setUp(self):
+        self.alice = User.objects.create_user("catalog-alice@example.com", "long-alice-password")
+        self.bob = User.objects.create_user("catalog-bob@example.com", "long-bob-password")
+
+    def test_recipe_catalog_can_be_filtered_by_diet_and_slot(self):
+        self.client.force_authenticate(user=self.alice)
+        response = self.client.get("/api/v1/recipes/?diet_style=vegetarian&slot=Breakfast")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 10)
+        self.assertTrue(all(row["diet_style"] == "vegetarian" for row in response.data))
+        self.assertTrue(all(row["slot"] == "Breakfast" for row in response.data))
+        first = response.data[0]
+        self.assertIn("portions", first)
+        self.assertIn("base_macros", first)
+        self.assertIn("steps", first)
+        self.assertIn("tip", first)
+
+    def test_recipe_favorites_are_private_to_each_user(self):
+        self.client.force_authenticate(user=self.alice)
+        recipe = self.client.get("/api/v1/recipes/?diet_style=balanced&slot=Breakfast").data[0]
+        created = self.client.post(
+            "/api/v1/recipes/favorites/",
+            {"recipe_id": recipe["id"]},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        self.assertTrue(created.data["recipe"]["is_favorite"])
+        listed = self.client.get("/api/v1/recipes/favorites/")
+        self.assertEqual(len(listed.data), 1)
+
+        self.client.force_authenticate(user=self.bob)
+        self.assertEqual(self.client.get("/api/v1/recipes/favorites/").data, [])
+        detail = self.client.get(f"/api/v1/recipes/{recipe['id']}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertFalse(detail.data["is_favorite"])
+
+        self.client.force_authenticate(user=self.alice)
+        deleted = self.client.delete(f"/api/v1/recipes/favorites/{recipe['id']}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertEqual(self.client.get("/api/v1/recipes/favorites/").data, [])
+
+    def test_exercise_catalog_and_nested_workout_routines_are_complete(self):
+        self.client.force_authenticate(user=self.alice)
+        exercises = self.client.get("/api/v1/exercises/")
+        self.assertEqual(exercises.status_code, 200)
+        self.assertEqual(len(exercises.data), 80)
+        self.assertTrue(exercises.data[0]["steps"])
+
+        routines = self.client.get("/api/v1/workout-routines/?mode=home&level=beginner")
+        self.assertEqual(routines.status_code, 200)
+        self.assertEqual(len(routines.data), 4)
+        self.assertEqual(len(routines.data[0]["exercise_links"]), 5)
+        first_exercise = routines.data[0]["exercise_links"][0]["exercise"]
+        self.assertTrue(first_exercise["steps"])
+        self.assertTrue(first_exercise["modification"])
+        self.assertTrue(first_exercise["common_mistake"])
