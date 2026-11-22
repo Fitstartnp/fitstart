@@ -278,3 +278,99 @@ class PersonalRecordApiTests(APITestCase):
         own = self.client.get("/api/v1/profile/")
         self.assertEqual(own.data["display_name"], "")
         self.assertEqual(own.data["unit_system"], "metric")
+
+
+class NestedChildRecordApiTests(APITestCase):
+    def setUp(self):
+        from apps.households.models import HouseholdMembership
+        from apps.tracking.models import GroceryList, WorkoutSession
+
+        self.owner = User.objects.create_user("nested-owner@example.com", "long-owner-password")
+        self.member = User.objects.create_user("nested-member@example.com", "long-member-password")
+        self.household = create_household(owner=self.owner, name="Nested records home")
+        HouseholdMembership.objects.create(
+            household=self.household,
+            user=self.member,
+            role=HouseholdMembership.Role.MEMBER,
+            status=HouseholdMembership.Status.ACTIVE,
+        )
+        profile = self.owner.personal_profile
+        profile.share_grocery_lists = True
+        profile.share_workout_history = True
+        profile.save(update_fields=("share_grocery_lists", "share_workout_history", "updated_at"))
+
+        self.grocery_list = GroceryList(
+            owner=self.owner,
+            household=self.household,
+            name="Shared weekly groceries",
+        )
+        self.grocery_list.full_clean()
+        self.grocery_list.save()
+
+        self.workout = WorkoutSession(
+            owner=self.owner,
+            household=self.household,
+            title="Strength session",
+        )
+        self.workout.full_clean()
+        self.workout.save()
+
+    def test_grocery_items_inherit_parent_sharing_but_only_owner_can_change(self):
+        self.client.force_authenticate(user=self.owner)
+        created = self.client.post(
+            f"/api/v1/grocery-lists/{self.grocery_list.pk}/items/",
+            {"name": "Oats", "quantity": "1 bag", "category": "Pantry"},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        item_id = created.data["id"]
+
+        self.client.force_authenticate(user=self.member)
+        listing = self.client.get(f"/api/v1/grocery-lists/{self.grocery_list.pk}/items/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual([item["name"] for item in listing.data], ["Oats"])
+        denied = self.client.post(
+            f"/api/v1/grocery-lists/{self.grocery_list.pk}/items/",
+            {"name": "Milk"},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        patch = self.client.patch(
+            f"/api/v1/grocery-lists/{self.grocery_list.pk}/items/{item_id}/",
+            {"is_checked": True},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 404)
+
+    def test_workout_sets_inherit_parent_sharing_but_only_owner_can_change(self):
+        self.client.force_authenticate(user=self.owner)
+        created = self.client.post(
+            f"/api/v1/workout-sessions/{self.workout.pk}/sets/",
+            {
+                "exercise_key": "squat",
+                "exercise_name": "Squat",
+                "set_number": 1,
+                "reps": 10,
+                "weight_kg": "40.00",
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+        set_id = created.data["id"]
+
+        self.client.force_authenticate(user=self.member)
+        listing = self.client.get(f"/api/v1/workout-sessions/{self.workout.pk}/sets/")
+        self.assertEqual(listing.status_code, 200)
+        self.assertEqual([item["exercise_name"] for item in listing.data], ["Squat"])
+        denied = self.client.post(
+            f"/api/v1/workout-sessions/{self.workout.pk}/sets/",
+            {"exercise_key": "press", "exercise_name": "Press", "set_number": 1, "reps": 8},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 403)
+        patch = self.client.patch(
+            f"/api/v1/workout-sessions/{self.workout.pk}/sets/{set_id}/",
+            {"reps": 12},
+            format="json",
+        )
+        self.assertEqual(patch.status_code, 404)
