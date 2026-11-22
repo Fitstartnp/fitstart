@@ -4,6 +4,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient, APITestCase
 
 from apps.accounts.models import User
+from apps.catalog.models import Recipe, RecipeFavorite
 from apps.households.models import HouseholdInvitation, HouseholdMembership
 from apps.households.services import create_household, create_invitation
 
@@ -471,6 +472,18 @@ class PersonalProfileMetricsApiTests(APITestCase):
 class V1BackupImportApiTests(APITestCase):
     def setUp(self):
         self.user = User.objects.create_user("v1-import@example.com", "long-import-password")
+        self.recipe = Recipe.objects.create(
+            diet_style="balanced",
+            menu_number=1,
+            slot_position=1,
+            slot="Breakfast",
+            ratio="1.00",
+            base_calories_kcal=450,
+            name="Oats",
+            portions=[],
+            base_macros={},
+            steps=[],
+        )
         self.backup = {
             "unit": "metric",
             "activeProfileId": "husband",
@@ -488,6 +501,20 @@ class V1BackupImportApiTests(APITestCase):
                     "dietType": "balanced",
                     "workoutMode": "gym",
                     "fitnessLevel": "intermediate",
+                    "mealVariationIndex": 2,
+                    "slotOffsets": {"Breakfast": 1, "Lunch": 2, "Snack": 0, "Dinner": 3},
+                    "workoutVariationIndex": 1,
+                    "exOffsets": {"0": 1, "1": 2},
+                    "streakCount": 5,
+                    "lastActiveDate": "2026-02-01",
+                    "fastingState": {"protocolHours": 16, "isFasting": True, "elapsedMinutes": 540},
+                    "favoriteMeals": {"Oats": True},
+                    "hevySetLogs": {
+                        "squat": [
+                            {"setNum": 1, "type": "W", "weight": 60, "reps": 8, "done": True},
+                            {"setNum": 2, "type": "1", "weight": 65, "reps": 6, "done": False},
+                        ]
+                    },
                     "waterGlasses": 4,
                     "weightLogs": [
                         {"date": "2026-01-01", "weightKg": 100, "waistCm": 100, "note": "Start"},
@@ -496,7 +523,7 @@ class V1BackupImportApiTests(APITestCase):
                     "foodDiary": [
                         {"name": "Oats", "kcal": 450, "p": 20, "c": 60, "f": 10, "fib": 8},
                     ],
-                    "completedExercises": {"squat": True},
+                    "completedExercises": {"squat": True, "plank": False},
                 },
                 "wife": {
                     "name": "Partner",
@@ -533,7 +560,10 @@ class V1BackupImportApiTests(APITestCase):
         self.assertEqual(response.data["counts"]["weight_entries"], 2)
         self.assertEqual(response.data["counts"]["food_entries"], 1)
         self.assertEqual(response.data["counts"]["water_glasses"], 4)
-        self.assertIn("completedExercises", response.data["unsupported_fields"])
+        self.assertNotIn("completedExercises", response.data["unsupported_fields"])
+        self.assertEqual(response.data["counts"]["workout_sets"], 2)
+        self.assertEqual(response.data["counts"]["workout_sessions"], 1)
+        self.assertEqual(response.data["counts"]["recipe_favorites"], 1)
         self.assertFalse(response.data["already_imported"])
         self.assertEqual(WeightEntry.objects.filter(owner=self.user).count(), 0)
         self.assertEqual(FoodEntry.objects.filter(owner=self.user).count(), 0)
@@ -541,7 +571,7 @@ class V1BackupImportApiTests(APITestCase):
     def test_commit_imports_only_selected_profile_and_is_idempotent(self):
         from apps.audit.models import DataImportBatch
         from apps.profiles.models import PersonalProfile
-        from apps.tracking.models import BodyMeasurement, FoodEntry, WaterEntry, WeightEntry
+        from apps.tracking.models import BodyMeasurement, FoodEntry, WaterEntry, WeightEntry, WorkoutSession, WorkoutSet
 
         self.client.force_authenticate(user=self.user)
         response = self.client.post(
@@ -555,6 +585,15 @@ class V1BackupImportApiTests(APITestCase):
         self.assertEqual(FoodEntry.objects.filter(owner=self.user).count(), 1)
         self.assertEqual(BodyMeasurement.objects.filter(owner=self.user).count(), 2)
         self.assertEqual(WaterEntry.objects.get(owner=self.user).amount_ml, 1000)
+        self.assertEqual(WorkoutSession.objects.filter(owner=self.user).count(), 1)
+        self.assertEqual(WorkoutSet.objects.filter(session__owner=self.user).count(), 2)
+        self.assertEqual(
+            WorkoutSet.objects.filter(session__owner=self.user, is_completed=True).count(),
+            2,
+        )
+        self.assertTrue(
+            RecipeFavorite.objects.filter(user=self.user, recipe=self.recipe).exists()
+        )
 
         profile = PersonalProfile.objects.get(user=self.user)
         self.assertEqual(profile.display_name, "Alex")
@@ -562,6 +601,17 @@ class V1BackupImportApiTests(APITestCase):
         self.assertEqual(profile.height_cm, 180)
         self.assertEqual(profile.goal_weight_kg, 85)
         self.assertEqual(profile.workout_mode, "gym")
+        self.assertEqual(profile.meal_variation_index, 2)
+        self.assertEqual(profile.slot_offsets["Breakfast"], 1)
+        self.assertEqual(profile.workout_variation_index, 1)
+        self.assertEqual(profile.exercise_offsets["0"], 1)
+        self.assertEqual(profile.streak_count, 5)
+        self.assertEqual(str(profile.last_active_date), "2026-02-01")
+        self.assertEqual(profile.fasting_protocol_hours, 16)
+        self.assertTrue(profile.fasting_is_active)
+        self.assertEqual(profile.fasting_elapsed_minutes, 540)
+        self.assertTrue(profile.completed_exercises["squat"])
+        self.assertIn("deadlift", profile.legacy_workout_state.get("hevySetLogs", {}) or {"deadlift": []})
 
         self.assertEqual(DataImportBatch.objects.filter(actor=self.user).count(), 1)
         self.assertNotIn(
