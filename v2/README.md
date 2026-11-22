@@ -13,7 +13,7 @@ This folder contains the new multi-user platform. The root `index.html` remains 
 - **API:** owner-scoped CRUD for weight, body measurements, food, water, meal plans, grocery lists/items, workouts/sets, fasting, and goals. Shared reads are allowed only for the selected household/category; writes remain owner-only. Shared records become private again when their owner leaves the household.
 - **Frontend:** responsive first dashboard for summary counts, weight, measurements, food, hydration, meal planning, grocery lists/items, workouts/sets, fasting, goals, profile/sharing settings, household creation, and invitation sending. Workout and fasting sessions can be ended by their owners.
 - **Tests:** local Windows checkout passes 37 Django tests, including dashboard render/static assets, invitation onboarding, record CRUD, private-by-default sharing, and household read/write isolation. GitHub Actions runs the same suite.
-- **Still pending:** recipe and exercise catalogue migration; nutrition-target/calculator interface; V1 JSON backup import/export; recipe and exercise catalogue migration; full browser interaction and accessibility testing; production PostgreSQL/SMTP installation and deployment; domain and TLS setup.
+- **Still pending:** recipe and exercise catalogue migration; nutrition-target/calculator interface; V1 JSON backup import/export; full browser interaction and accessibility testing; production PostgreSQL/SMTP installation and deployment; domain and TLS setup.
 
 ## Local development (Windows PowerShell)
 
