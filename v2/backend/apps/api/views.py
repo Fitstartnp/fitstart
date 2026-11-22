@@ -177,9 +177,10 @@ class AcceptInvitationView(APIView):
                 password = request.data.get("password")
                 if not isinstance(password, str) or not password:
                     raise ValidationError({"password": "Choose a password to create your FitStart account."})
+                password_user = User(email=invitation.invited_email)
                 try:
                     from django.contrib.auth.password_validation import validate_password
-                    validate_password(password, user=new_user)
+                    validate_password(password, user=password_user)
                 except DjangoValidationError as exc:
                     raise ValidationError({"password": list(exc.messages)}) from exc
                 user = User.objects.create_user(
