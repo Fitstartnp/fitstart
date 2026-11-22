@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from apps.households.models import Household, HouseholdMembership
+from apps.catalog.models import Exercise, Recipe, RecipeFavorite, RoutineExercise, WorkoutRoutine
 from apps.profiles.models import PersonalProfile
 from apps.tracking.models import (
     BodyMeasurement,
@@ -151,3 +152,52 @@ class WorkoutSetSerializer(serializers.ModelSerializer):
         model = WorkoutSet
         fields = "__all__"
         read_only_fields = ("id", "session")
+
+
+class RecipeSerializer(serializers.ModelSerializer):
+    is_favorite = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Recipe
+        fields = "__all__"
+        read_only_fields = fields
+
+    def get_is_favorite(self, obj):
+        request = self.context.get("request")
+        if not request or not request.user.is_authenticated:
+            return False
+        return RecipeFavorite.objects.filter(user=request.user, recipe=obj).exists()
+
+
+class ExerciseSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exercise
+        fields = "__all__"
+        read_only_fields = fields
+
+
+class RoutineExerciseSerializer(serializers.ModelSerializer):
+    exercise = ExerciseSerializer(read_only=True)
+
+    class Meta:
+        model = RoutineExercise
+        fields = ("id", "position", "exercise")
+        read_only_fields = fields
+
+
+class WorkoutRoutineSerializer(serializers.ModelSerializer):
+    exercise_links = RoutineExerciseSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = WorkoutRoutine
+        fields = ("id", "mode", "level", "variation_index", "title", "exercise_links")
+        read_only_fields = fields
+
+
+class RecipeFavoriteSerializer(serializers.ModelSerializer):
+    recipe = RecipeSerializer(read_only=True)
+
+    class Meta:
+        model = RecipeFavorite
+        fields = ("id", "recipe", "created_at")
+        read_only_fields = fields
