@@ -77,6 +77,15 @@ Each resource supports:
 | `/fasting-sessions/` | FastingSession | `share_fasting_sessions` |
 | `/goals/` | Goal | `share_goals` |
 
+Nested child resources:
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET / POST | `/api/v1/grocery-lists/{list_id}/items/` | List or add items to a visible grocery list |
+| GET / PATCH / DELETE | `/api/v1/grocery-lists/{list_id}/items/{item_id}/` | Read a shared item or mutate it as the list owner |
+| GET / POST | `/api/v1/workout-sessions/{session_id}/sets/` | List or add exercise sets to a visible workout |
+| GET / PATCH / DELETE | `/api/v1/workout-sessions/{session_id}/sets/{set_id}/` | Read a shared set or mutate it as the workout owner |
+
 Prefix each resource path with `/api/v1`.
 
 ## Record authorization rules
@@ -91,4 +100,4 @@ Prefix each resource path with `/api/v1`.
 
 ## Not yet exposed as endpoints
 
-The database schema already includes `WorkoutSet` and `GroceryItem`, but nested CRUD endpoints for these child records are not yet available. Recipe catalogue, micronutrient calculations, exercise catalogue, import/export, and V1 backup import are also still pending migration into V2. The V2 dashboard currently has forms for weight, food, workouts, goals, profile privacy, household creation, and invitations; not every API resource has a visible form yet.
+Recipe catalogue, micronutrient calculations, static exercise catalogue and import/export/V1 backup import are still pending migration into V2. The V2 dashboard currently has forms and tables for weight, body measurements, food, water, meal plans, grocery lists/items, workout sessions/sets, fasting sessions, goals, profile privacy, household creation, and invitations. All visible areas still need broader browser interaction, accessibility and usability testing.
