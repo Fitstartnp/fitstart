@@ -24,6 +24,12 @@ class DashboardRenderTests(TestCase):
         self.assertContains(response, "weightForm")
         self.assertContains(response, "profileForm")
         self.assertContains(response, "householdForm")
+        self.assertContains(response, "measureForm")
+        self.assertContains(response, "waterForm")
+        self.assertContains(response, "mealForm")
+        self.assertContains(response, "groceryItemForm")
+        self.assertContains(response, "workoutSetForm")
+        self.assertContains(response, "fastingForm")
         self.assertContains(response, "fitstart/app.js")
         self.assertContains(response, "fitstart/app.css")
 
