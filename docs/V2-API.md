@@ -55,6 +55,16 @@ Invitation notes:
 - Tokens expire after seven days, are single-use, and are never returned in API responses.
 - Production must configure SMTP/email. The production settings deliberately refuse console email mode.
 
+## Personal data export
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/api/v1/export/` | Download the current account's profile and personally owned records as JSON |
+
+The export requires an authenticated session. It includes the current account's profile settings and records owned by that account, including grocery items and workout sets. It deliberately excludes records owned by other household members—even if those records are visible as shared records in the application. The response is marked `Cache-Control: no-store` and is sent as an attachment named `fitstart-v2-export.json`.
+
+The export does not include passwords, session identifiers/cookies, invitation tokens, GitHub tokens, or the raw V1 import backup.
+
 ## V1 backup migration
 
 | Method | Path | Purpose |
