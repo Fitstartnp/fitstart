@@ -734,6 +734,7 @@ class MyDataExportApiTests(APITestCase):
         self.assertNotIn("gist_token", serialized.lower())
 
     def test_export_preserves_v1_planner_fasting_and_legacy_favorite_state(self):
+        from apps.profiles.models import PersonalProfile
         profile = PersonalProfile.objects.get(user=self.bob)
         profile.meal_variation_index = 7
         profile.slot_offsets = {"breakfast": 2, "dinner": 1}
