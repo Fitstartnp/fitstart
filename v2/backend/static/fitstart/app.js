@@ -72,7 +72,12 @@
     const table = document.createElement("table");
     const thead = document.createElement("thead");
     const head = document.createElement("tr");
-    columns.forEach((column) => addCell(head, column.label));
+    columns.forEach((column) => {
+      const heading = document.createElement("th");
+      heading.scope = "col";
+      heading.textContent = column.label;
+      head.appendChild(heading);
+    });
     if (deleteConfig) {
       const actionHeading = document.createElement("th");
       actionHeading.textContent = "Actions";
@@ -340,7 +345,12 @@
     const header = document.createElement("thead");
     const headerRow = document.createElement("tr");
     const labels = kind === "workout" ? ["Started", "Workout", "Notes", "Actions"] : ["Started", "Target", "Ended", "Actions"];
-    labels.forEach((label) => addCell(headerRow, label));
+    labels.forEach((label) => {
+      const heading = document.createElement("th");
+      heading.scope = "col";
+      heading.textContent = label;
+      headerRow.appendChild(heading);
+    });
     header.appendChild(headerRow);
     table.appendChild(header);
     const body = document.createElement("tbody");
