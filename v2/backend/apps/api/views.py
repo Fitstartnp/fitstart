@@ -518,6 +518,89 @@ class WorkoutSetDetailView(APIView):
         return Response(status=204)
 
 
+class MyDataExportView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        profile, _ = PersonalProfile.objects.get_or_create(user=user)
+
+        def serialize(queryset, serializer_class):
+            return serializer_class(queryset, many=True).data
+
+        weight_records = WeightEntry.objects.filter(owner=user).order_by("measured_on", "id")
+        body_records = BodyMeasurement.objects.filter(owner=user).order_by("measured_at", "id")
+        food_records = FoodEntry.objects.filter(owner=user).order_by("logged_at", "id")
+        water_records = WaterEntry.objects.filter(owner=user).order_by("logged_at", "id")
+        meal_records = MealPlanEntry.objects.filter(owner=user).order_by("plan_date", "id")
+        grocery_records = GroceryList.objects.filter(owner=user).prefetch_related("items")
+        workout_records = WorkoutSession.objects.filter(owner=user).prefetch_related("sets")
+        fasting_records = FastingSession.objects.filter(owner=user).order_by("started_at", "id")
+        goal_records = Goal.objects.filter(owner=user).order_by("created_at", "id")
+
+        payload = {
+            "format": "fitstart-v2-export",
+            "version": 1,
+            "exported_at": timezone.now(),
+            "account": {"email": user.email},
+            "profile": {
+                "display_name": profile.display_name,
+                "unit_system": profile.unit_system,
+                "timezone_name": profile.timezone_name,
+                "age": profile.age,
+                "gender": profile.gender,
+                "height_cm": profile.height_cm,
+                "start_weight_kg": profile.start_weight_kg,
+                "current_weight_kg": profile.current_weight_kg,
+                "goal_weight_kg": profile.goal_weight_kg,
+                "activity_multiplier": profile.activity_multiplier,
+                "daily_deficit_kcal": profile.daily_deficit_kcal,
+                "diet_type": profile.diet_type,
+                "workout_mode": profile.workout_mode,
+                "fitness_level": profile.fitness_level,
+                "sharing": {
+                    "meal_plans": profile.share_meal_plans,
+                    "grocery_lists": profile.share_grocery_lists,
+                    "workout_plans": profile.share_workout_plans,
+                    "workout_history": profile.share_workout_history,
+                    "weight_history": profile.share_weight_history,
+                    "body_measurements": profile.share_body_measurements,
+                    "food_diary": profile.share_food_diary,
+                    "water_logs": profile.share_water_logs,
+                    "fasting_sessions": profile.share_fasting_sessions,
+                    "goals": profile.share_goals,
+                },
+            },
+            "records": {
+                "weight_entries": serialize(weight_records, WeightEntrySerializer),
+                "body_measurements": serialize(body_records, BodyMeasurementSerializer),
+                "food_entries": serialize(food_records, FoodEntrySerializer),
+                "water_entries": serialize(water_records, WaterEntrySerializer),
+                "meal_plan_entries": serialize(meal_records, MealPlanEntrySerializer),
+                "grocery_lists": [
+                    {
+                        **GroceryListSerializer(item).data,
+                        "items": GroceryItemSerializer(item.items.all(), many=True).data,
+                    }
+                    for item in grocery_records
+                ],
+                "workout_sessions": [
+                    {
+                        **WorkoutSessionSerializer(item).data,
+                        "sets": WorkoutSetSerializer(item.sets.all(), many=True).data,
+                    }
+                    for item in workout_records
+                ],
+                "fasting_sessions": serialize(fasting_records, FastingSessionSerializer),
+                "goals": serialize(goal_records, GoalSerializer),
+            },
+        }
+        response = Response(payload)
+        response["Content-Disposition"] = 'attachment; filename="fitstart-v2-export.json"'
+        response["Cache-Control"] = "no-store"
+        return response
+
+
 def _v1_decimal(value, *, minimum=Decimal("0"), maximum=Decimal("1000000")):
     try:
         result = Decimal(str(value))
