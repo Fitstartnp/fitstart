@@ -9,6 +9,13 @@ on:
       - main
       - v2-platform
 
+concurrency:
+  group: fitstart-v2-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   django:
     runs-on: ubuntu-latest
