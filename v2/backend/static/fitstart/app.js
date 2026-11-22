@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const state = { account: null, profile: null, households: [], weights: [], measures: [], foods: [], waters: [], meals: [], groceries: [], groceryItems: {}, workouts: [], workoutSets: {}, fastings: [], goals: [] };
+  const state = { account: null, profile: null, households: [], weights: [], measures: [], foods: [], waters: [], meals: [], groceries: [], groceryItems: {}, workouts: [], workoutSets: {}, fastings: [], goals: [], catalogRecipes: [], favoriteRecipeIds: new Set(), catalogRoutines: [] };
   const $ = (id) => document.getElementById(id);
 
   function cookie(name) {
@@ -399,6 +399,237 @@
     ], state.goals, "No goals yet.");
   }
 
+  function renderRecipeCatalog() {
+    const host = $("recipeResults");
+    if (!host) return;
+    host.replaceChildren();
+    if (!state.catalogRecipes.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No recipes matched these filters.";
+      host.appendChild(empty);
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "catalog-grid";
+    state.catalogRecipes.forEach((recipe) => {
+      const card = document.createElement("article");
+      card.className = "catalog-card";
+      const header = document.createElement("div");
+      header.className = "catalog-card-header";
+      const title = document.createElement("h3");
+      title.textContent = (recipe.icon || "🍽️") + " " + recipe.name;
+      const subtitle = document.createElement("p");
+      subtitle.className = "muted";
+      subtitle.textContent = recipe.diet_style.replaceAll("_", " ") + " · " + recipe.slot + " · Menu " + recipe.menu_number;
+      header.append(title, subtitle);
+      card.appendChild(header);
+
+      const macros = document.createElement("p");
+      macros.className = "catalog-meta";
+      macros.textContent = recipe.base_calories_kcal + " kcal · Protein " + recipe.base_macros.p + "g · Carbs " + recipe.base_macros.c + "g · Fat " + recipe.base_macros.f + "g";
+      card.appendChild(macros);
+
+      const details = document.createElement("details");
+      const summary = document.createElement("summary");
+      summary.textContent = "Ingredients & cooking instructions";
+      details.appendChild(summary);
+      const ingredients = document.createElement("ul");
+      recipe.portions.forEach((portion) => {
+        const li = document.createElement("li");
+        li.textContent = portion.qty + " " + portion.unit + " " + portion.item;
+        ingredients.appendChild(li);
+      });
+      details.appendChild(ingredients);
+      const steps = document.createElement("ol");
+      recipe.steps.forEach((step) => {
+        const li = document.createElement("li");
+        li.textContent = step;
+        steps.appendChild(li);
+      });
+      details.appendChild(steps);
+      const tip = document.createElement("p");
+      tip.className = "muted";
+      tip.textContent = recipe.tip;
+      details.appendChild(tip);
+      card.appendChild(details);
+
+      const actions = document.createElement("div");
+      actions.className = "catalog-actions";
+      const favorite = document.createElement("button");
+      favorite.type = "button";
+      favorite.className = "btn small secondary";
+      const isFavorite = state.favoriteRecipeIds.has(recipe.id);
+      favorite.textContent = isFavorite ? "★ Favorited" : "☆ Favorite";
+      favorite.addEventListener("click", async () => {
+        favorite.disabled = true;
+        try {
+          if (state.favoriteRecipeIds.has(recipe.id)) {
+            await api("/recipes/favorites/" + recipe.id + "/", { method: "DELETE" });
+            state.favoriteRecipeIds.delete(recipe.id);
+          } else {
+            await api("/recipes/favorites/", { method: "POST", body: { recipe_id: recipe.id } });
+            state.favoriteRecipeIds.add(recipe.id);
+          }
+          renderRecipeCatalog();
+        } catch (error) {
+          favorite.disabled = false;
+          showStatus("recipeStatus", error.message, "error");
+        }
+      });
+
+      const log = document.createElement("button");
+      log.type = "button";
+      log.className = "btn small";
+      log.textContent = "Log as meal";
+      log.addEventListener("click", async () => {
+        log.disabled = true;
+        try {
+          await api("/food-entries/", {
+            method: "POST",
+            body: {
+              food_name: recipe.name,
+              meal_slot: recipe.slot.toLowerCase(),
+              quantity: 1,
+              unit: "serving",
+              calories_kcal: recipe.base_calories_kcal,
+              protein_g: recipe.base_macros.p,
+              carbs_g: recipe.base_macros.c,
+              fat_g: recipe.base_macros.f,
+              fiber_g: recipe.base_macros.fib
+            }
+          });
+          await refreshRecords();
+          showStatus("recipeStatus", recipe.name + " added to your private food diary.", "success");
+        } catch (error) {
+          showStatus("recipeStatus", error.message, "error");
+        } finally {
+          log.disabled = false;
+        }
+      });
+      actions.append(favorite, log);
+      card.appendChild(actions);
+      grid.appendChild(card);
+    });
+    host.appendChild(grid);
+  }
+
+  function renderWorkoutCatalog() {
+    const host = $("routineResults");
+    if (!host) return;
+    host.replaceChildren();
+    if (!state.catalogRoutines.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No routines found for these settings.";
+      host.appendChild(empty);
+      return;
+    }
+    const grid = document.createElement("div");
+    grid.className = "catalog-grid";
+    state.catalogRoutines.forEach((routine) => {
+      const card = document.createElement("article");
+      card.className = "catalog-card";
+      const title = document.createElement("h3");
+      title.textContent = routine.title;
+      const subtitle = document.createElement("p");
+      subtitle.className = "muted";
+      subtitle.textContent = routine.mode.toUpperCase() + " · " + routine.level + " · " + routine.exercise_links.length + " exercises";
+      card.append(title, subtitle);
+      const list = document.createElement("ol");
+      routine.exercise_links.forEach((link) => {
+        const exercise = link.exercise;
+        const li = document.createElement("li");
+        const name = document.createElement("strong");
+        name.textContent = exercise.name;
+        li.appendChild(name);
+        const detail = document.createElement("p");
+        detail.className = "muted";
+        detail.textContent = exercise.detail + " · " + exercise.focus + " · " + exercise.muscles;
+        li.appendChild(detail);
+        const details = document.createElement("details");
+        const summary = document.createElement("summary");
+        summary.textContent = "View instructions and form tips";
+        details.appendChild(summary);
+        const steps = document.createElement("ol");
+        exercise.steps.forEach((step) => {
+          const stepItem = document.createElement("li");
+          stepItem.textContent = step;
+          steps.appendChild(stepItem);
+        });
+        details.appendChild(steps);
+        const mod = document.createElement("p");
+        mod.textContent = "Modification: " + exercise.modification;
+        details.appendChild(mod);
+        const mistake = document.createElement("p");
+        mistake.textContent = "Avoid: " + exercise.common_mistake;
+        details.appendChild(mistake);
+        li.appendChild(details);
+        list.appendChild(li);
+      });
+      card.appendChild(list);
+      const start = document.createElement("button");
+      start.type = "button";
+      start.className = "btn small";
+      start.textContent = "Start this routine";
+      start.addEventListener("click", async () => {
+        start.disabled = true;
+        try {
+          await api("/workout-sessions/", {
+            method: "POST",
+            body: { title: routine.title, notes: "Started from the V1 exercise catalogue." }
+          });
+          await refreshRecords();
+          showStatus("routineStatus", routine.title + " started. Log sets in the Workout sessions panel.", "success");
+        } catch (error) {
+          showStatus("routineStatus", error.message, "error");
+        } finally {
+          start.disabled = false;
+        }
+      });
+      card.appendChild(start);
+      grid.appendChild(card);
+    });
+    host.appendChild(grid);
+  }
+
+  async function refreshRecipeCatalog() {
+    const params = new URLSearchParams();
+    const diet = $("recipeDiet").value;
+    const slot = $("recipeSlot").value;
+    const search = $("recipeSearch").value.trim();
+    if (diet) params.set("diet_style", diet);
+    if (slot) params.set("slot", slot);
+    if (search) params.set("search", search);
+    state.catalogRecipes = await api("/recipes/?" + params.toString());
+    renderRecipeCatalog();
+  }
+
+  async function refreshWorkoutCatalog() {
+    const params = new URLSearchParams({
+      mode: $("routineMode").value,
+      level: $("routineLevel").value
+    });
+    state.catalogRoutines = await api("/workout-routines/?" + params.toString());
+    renderWorkoutCatalog();
+  }
+
+  async function loadCatalogs() {
+    const [recipes, favorites, routines] = await Promise.all([
+      api("/recipes/?diet_style=" + encodeURIComponent(state.profile.diet_type || "balanced")),
+      api("/recipes/favorites/"),
+      api("/workout-routines/?mode=" + encodeURIComponent(state.profile.workout_mode || "home") + "&level=" + encodeURIComponent(state.profile.fitness_level || "beginner"))
+    ]);
+    state.catalogRecipes = recipes;
+    state.favoriteRecipeIds = new Set(favorites.map((item) => item.recipe.id));
+    state.catalogRoutines = routines;
+    renderRecipeCatalog();
+    renderWorkoutCatalog();
+    $("recipeDiet").value = state.profile.diet_type || "balanced";
+    $("routineMode").value = state.profile.workout_mode || "home";
+    $("routineLevel").value = state.profile.fitness_level || "beginner";
+  }
+
   async function loadData() {
     setDateDefaults();
     const [account, profile, households, weights, measures, foods, waters, meals, groceries, workouts, fastings, goals] = await Promise.all([
@@ -422,6 +653,7 @@
     state.goals = goals;
     await loadChildRecords();
     renderAll();
+    await loadCatalogs();
     $("appLoading").hidden = true;
     $("appContent").hidden = false;
   }
@@ -770,6 +1002,15 @@
       button.textContent = "Confirm and import this profile";
     }
   });
+
+  $("recipeDiet").addEventListener("change", () => refreshRecipeCatalog().catch((e) => showStatus("recipeStatus", e.message, "error")));
+  $("recipeSlot").addEventListener("change", () => refreshRecipeCatalog().catch((e) => showStatus("recipeStatus", e.message, "error")));
+  $("recipeSearch").addEventListener("input", () => {
+    if (window.__fitstartRecipeSearchTimer) clearTimeout(window.__fitstartRecipeSearchTimer);
+    window.__fitstartRecipeSearchTimer = setTimeout(() => refreshRecipeCatalog().catch((e) => showStatus("recipeStatus", e.message, "error")), 250);
+  });
+  $("routineMode").addEventListener("change", () => refreshWorkoutCatalog().catch((e) => showStatus("routineStatus", e.message, "error")));
+  $("routineLevel").addEventListener("change", () => refreshWorkoutCatalog().catch((e) => showStatus("routineStatus", e.message, "error")));
 
   $("exportDataButton").addEventListener("click", async () => {
     const button = $("exportDataButton");
