@@ -57,7 +57,7 @@
     row.appendChild(cell);
   }
 
-  function renderTable(id, columns, rows, emptyText) {
+  function renderTable(id, columns, rows, emptyText, deleteConfig = null) {
     const host = $(id);
     host.replaceChildren();
     if (!rows.length) {
@@ -73,17 +73,59 @@
     const thead = document.createElement("thead");
     const head = document.createElement("tr");
     columns.forEach((column) => addCell(head, column.label));
+    if (deleteConfig) {
+      const actionHeading = document.createElement("th");
+      actionHeading.textContent = "Actions";
+      head.appendChild(actionHeading);
+    }
     thead.appendChild(head);
     table.appendChild(thead);
     const tbody = document.createElement("tbody");
     rows.forEach((item) => {
       const tr = document.createElement("tr");
       columns.forEach((column) => addCell(tr, column.value(item)));
+      if (deleteConfig) {
+        const action = document.createElement("td");
+        action.className = "table-actions";
+        if (item.owner === state.account.id) {
+          action.appendChild(createDeleteButton(
+            item, deleteConfig.endpoint, deleteConfig.statusId, deleteConfig.label
+          ));
+        } else {
+          action.textContent = "Shared · view only";
+        }
+        tr.appendChild(action);
+      }
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
     wrap.appendChild(table);
     host.appendChild(wrap);
+  }
+
+  function createDeleteButton(record, endpoint, statusId, label) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn danger small";
+    button.textContent = "Delete";
+    button.setAttribute("aria-label", "Delete " + label);
+    button.addEventListener("click", async () => {
+      if (!window.confirm("Delete this " + label + "? This cannot be undone.")) return;
+      button.disabled = true;
+      try {
+        await api(endpoint + record.id + "/", { method: "DELETE" });
+        showStatus(statusId, label.charAt(0).toUpperCase() + label.slice(1) + " deleted.", "success");
+        try {
+          await refreshRecords();
+        } catch (refreshError) {
+          showStatus(statusId, "Deleted, but the list could not refresh: " + refreshError.message, "error");
+        }
+      } catch (error) {
+        button.disabled = false;
+        showStatus(statusId, error.message, "error");
+      }
+    });
+    return button;
   }
 
   function renderHouseholds() {
@@ -297,7 +339,7 @@
     const table = document.createElement("table");
     const header = document.createElement("thead");
     const headerRow = document.createElement("tr");
-    const labels = kind === "workout" ? ["Started", "Workout", "Notes", "Action"] : ["Started", "Target", "Ended", "Action"];
+    const labels = kind === "workout" ? ["Started", "Workout", "Notes", "Actions"] : ["Started", "Target", "Ended", "Actions"];
     labels.forEach((label) => addCell(headerRow, label));
     header.appendChild(headerRow);
     table.appendChild(header);
@@ -313,28 +355,37 @@
         addCell(row, record.ended_at ? new Date(record.ended_at).toLocaleString() : "In progress");
       }
       const action = document.createElement("td");
-      if (!record.ended_at && record.owner === state.account.id) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "btn small secondary";
-        button.textContent = kind === "workout" ? "Finish workout" : "End fast";
-        button.addEventListener("click", async () => {
-          button.disabled = true;
-          try {
-            const path = kind === "workout" ? "/workout-sessions/" : "/fasting-sessions/";
-            await api(path + record.id + "/", {
-              method: "PATCH",
-              body: { ended_at: new Date().toISOString() }
-            });
-            await refreshRecords();
-          } catch (error) {
-            button.disabled = false;
-            showStatus(kind === "workout" ? "workoutStatus" : "fastingStatus", error.message, "error");
-          }
-        });
-        action.appendChild(button);
+      action.className = "table-actions";
+      if (record.owner === state.account.id) {
+        if (!record.ended_at) {
+          const finish = document.createElement("button");
+          finish.type = "button";
+          finish.className = "btn small secondary";
+          finish.textContent = kind === "workout" ? "Finish workout" : "End fast";
+          finish.addEventListener("click", async () => {
+            finish.disabled = true;
+            try {
+              const endpoint = kind === "workout" ? "/workout-sessions/" : "/fasting-sessions/";
+              await api(endpoint + record.id + "/", {
+                method: "PATCH",
+                body: { ended_at: new Date().toISOString() }
+              });
+              await refreshRecords();
+            } catch (error) {
+              finish.disabled = false;
+              showStatus(kind === "workout" ? "workoutStatus" : "fastingStatus", error.message, "error");
+            }
+          });
+          action.appendChild(finish);
+        }
+        const endpoint = kind === "workout" ? "/workout-sessions/" : "/fasting-sessions/";
+        action.appendChild(createDeleteButton(
+          record, endpoint,
+          kind === "workout" ? "workoutStatus" : "fastingStatus",
+          kind === "workout" ? "workout session" : "fasting session"
+        ));
       } else {
-        action.textContent = record.ended_at ? "Completed" : "Read only";
+        action.textContent = record.ended_at ? "Completed · view only" : "In progress · view only";
       }
       row.appendChild(action);
       body.appendChild(row);
@@ -464,34 +515,34 @@
       { label: "Date", value: (r) => r.measured_on },
       { label: "Weight", value: (r) => r.weight_kg + " kg" },
       { label: "Note", value: (r) => r.note }
-    ], state.weights, "No weight entries yet.");
+    ], state.weights, "No weight entries yet.", { endpoint: "/weight-entries/", statusId: "weightStatus", label: "weight entry" });
     renderTable("measureTable", [
       { label: "Measured", value: (r) => new Date(r.measured_at).toLocaleString() },
       { label: "Waist", value: (r) => r.waist_cm == null ? "—" : r.waist_cm + " cm" },
       { label: "Hips", value: (r) => r.hip_cm == null ? "—" : r.hip_cm + " cm" },
       { label: "Chest", value: (r) => r.chest_cm == null ? "—" : r.chest_cm + " cm" }
-    ], state.measures, "No body measurements yet.");
+    ], state.measures, "No body measurements yet.", { endpoint: "/body-measurements/", statusId: "measureStatus", label: "body measurement" });
     renderTable("foodTable", [
       { label: "Logged", value: (r) => new Date(r.logged_at).toLocaleString() },
       { label: "Food", value: (r) => r.food_name },
       { label: "Meal", value: (r) => r.meal_slot },
       { label: "Energy", value: (r) => r.calories_kcal == null ? "—" : r.calories_kcal + " kcal" }
-    ], state.foods, "No food entries yet.");
+    ], state.foods, "No food entries yet.", { endpoint: "/food-entries/", statusId: "foodStatus", label: "food entry" });
     renderTable("waterTable", [
       { label: "Logged", value: (r) => new Date(r.logged_at).toLocaleString() },
       { label: "Amount", value: (r) => r.amount_ml + " ml" }
-    ], state.waters, "No water entries yet.");
+    ], state.waters, "No water entries yet.", { endpoint: "/water-entries/", statusId: "waterStatus", label: "water entry" });
     renderTable("mealTable", [
       { label: "Date", value: (r) => r.plan_date },
       { label: "Meal", value: (r) => r.meal_slot },
       { label: "Plan", value: (r) => r.title },
       { label: "Servings", value: (r) => r.servings }
-    ], state.meals, "No planned meals yet.");
+    ], state.meals, "No planned meals yet.", { endpoint: "/meal-plan-entries/", statusId: "mealStatus", label: "meal plan entry" });
     renderTable("groceryTable", [
       { label: "Week of", value: (r) => r.week_of },
       { label: "List", value: (r) => r.name },
       { label: "Status", value: (r) => r.is_archived ? "Archived" : "Active" }
-    ], state.groceries, "No grocery lists yet.");
+    ], state.groceries, "No grocery lists yet.", { endpoint: "/grocery-lists/", statusId: "groceryStatus", label: "grocery list" });
     renderTimedSessions("workoutTable", state.workouts, "workout");
     renderTimedSessions("fastingTable", state.fastings, "fasting");
     renderTable("goalTable", [
@@ -499,7 +550,7 @@
       { label: "Metric", value: (r) => r.metric_key },
       { label: "Target", value: (r) => r.target_value + (r.unit ? " " + r.unit : "") },
       { label: "Status", value: (r) => r.status }
-    ], state.goals, "No goals yet.");
+    ], state.goals, "No goals yet.", { endpoint: "/goals/", statusId: "goalStatus", label: "goal" });
   }
 
   function renderRecipeCatalog() {
