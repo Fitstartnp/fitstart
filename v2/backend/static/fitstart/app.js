@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const state = { account: null, profile: null, households: [], weights: [], foods: [], workouts: [], goals: [] };
+  const state = { account: null, profile: null, households: [], weights: [], measures: [], foods: [], waters: [], meals: [], groceries: [], workouts: [], fastings: [], goals: [] };
   const $ = (id) => document.getElementById(id);
 
   function cookie(name) {
@@ -96,7 +96,7 @@
       host.appendChild(row);
     });
 
-    ["inviteHousehold", "weightHousehold", "foodHousehold", "workoutHousehold", "goalHousehold"].forEach((id) => {
+    ["inviteHousehold", "weightHousehold", "measureHousehold", "foodHousehold", "waterHousehold", "mealHousehold", "groceryHousehold", "workoutHousehold", "fastingHousehold", "goalHousehold"].forEach((id) => {
       const select = $(id);
       const previous = select.value;
       select.replaceChildren();
@@ -172,21 +172,24 @@
   }
 
   async function loadData() {
-    const [account, profile, households, weights, foods, workouts, goals] = await Promise.all([
-      api("/me/"),
-      api("/profile/"),
-      api("/households/"),
-      api("/weight-entries/"),
-      api("/food-entries/"),
-      api("/workout-sessions/"),
-      api("/goals/")
+    const [account, profile, households, weights, measures, foods, waters, meals, groceries, workouts, fastings, goals] = await Promise.all([
+      api("/me/"), api("/profile/"), api("/households/"),
+      api("/weight-entries/"), api("/body-measurements/"),
+      api("/food-entries/"), api("/water-entries/"),
+      api("/meal-plan-entries/"), api("/grocery-lists/"),
+      api("/workout-sessions/"), api("/fasting-sessions/"), api("/goals/")
     ]);
     state.account = account;
     state.profile = profile;
     state.households = households;
     state.weights = weights;
+    state.measures = measures;
     state.foods = foods;
+    state.waters = waters;
+    state.meals = meals;
+    state.groceries = groceries;
     state.workouts = workouts;
+    state.fastings = fastings;
     state.goals = goals;
     renderAll();
     $("appLoading").hidden = true;
@@ -308,11 +311,15 @@
   });
 
   async function refreshRecords() {
-    const [weights, foods, workouts, goals] = await Promise.all([
-      api("/weight-entries/"), api("/food-entries/"),
-      api("/workout-sessions/"), api("/goals/")
+    const [weights, measures, foods, waters, meals, groceries, workouts, fastings, goals] = await Promise.all([
+      api("/weight-entries/"), api("/body-measurements/"),
+      api("/food-entries/"), api("/water-entries/"),
+      api("/meal-plan-entries/"), api("/grocery-lists/"),
+      api("/workout-sessions/"), api("/fasting-sessions/"), api("/goals/")
     ]);
-    state.weights = weights; state.foods = foods; state.workouts = workouts; state.goals = goals;
+    state.weights = weights; state.measures = measures; state.foods = foods;
+    state.waters = waters; state.meals = meals; state.groceries = groceries;
+    state.workouts = workouts; state.fastings = fastings; state.goals = goals;
     renderAll();
   }
 
