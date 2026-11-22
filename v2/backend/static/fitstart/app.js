@@ -665,6 +665,112 @@
     renderHouseholds();
   }
 
+  let pendingV1Import = null;
+
+  function renderV1ImportPreview(preview) {
+    const host = $("v1ImportPreviewContent");
+    host.replaceChildren();
+    const counts = document.createElement("ul");
+    counts.className = "muted";
+    Object.entries(preview.counts || {}).forEach(([key, value]) => {
+      const li = document.createElement("li");
+      li.textContent = key.replaceAll("_", " ") + ": " + value;
+      counts.appendChild(li);
+    });
+    host.appendChild(counts);
+
+    const warnings = document.createElement("ul");
+    warnings.className = "muted";
+    (preview.warnings || []).forEach((warning) => {
+      const li = document.createElement("li");
+      li.textContent = warning;
+      warnings.appendChild(li);
+    });
+    (preview.unsupported_fields || []).forEach((field) => {
+      const li = document.createElement("li");
+      li.textContent = "Not imported yet: " + field;
+      warnings.appendChild(li);
+    });
+    const invalid = preview.invalid_entries_skipped || {};
+    Object.entries(invalid).forEach(([key, value]) => {
+      if (value > 0) {
+        const li = document.createElement("li");
+        li.textContent = "Invalid " + key.replaceAll("_", " ") + " skipped: " + value;
+        warnings.appendChild(li);
+      }
+    });
+    if (warnings.childNodes.length) {
+      const heading = document.createElement("h4");
+      heading.textContent = "Important notes";
+      host.append(heading, warnings);
+    }
+    if (preview.already_imported) {
+      const warning = document.createElement("p");
+      warning.className = "status error";
+      warning.textContent = "This exact profile backup has already been imported into this account.";
+      host.appendChild(warning);
+    }
+    $("confirmV1ImportButton").disabled = Boolean(preview.already_imported);
+    $("v1ImportPreview").hidden = false;
+  }
+
+  $("v1ImportForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
+    pendingV1Import = null;
+    $("v1ImportPreview").hidden = true;
+    const file = $("v1BackupFile").files && $("v1BackupFile").files[0];
+    if (!file) {
+      showStatus("importStatus", "Choose a V1 JSON backup file first.", "error");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      showStatus("importStatus", "This backup is larger than the 2 MB import limit.", "error");
+      return;
+    }
+    try {
+      const backup = JSON.parse(await file.text());
+      const profileId = $("v1ProfileChoice").value;
+      const preview = await api("/imports/v1/preview/", {
+        method: "POST",
+        body: { backup, profile_id: profileId }
+      });
+      pendingV1Import = { backup, profileId };
+      renderV1ImportPreview(preview);
+      showStatus("importStatus", "Review the preview carefully. Existing records will be preserved; profile settings will be updated.", "success");
+    } catch (error) {
+      showStatus("importStatus", "Preview failed: " + error.message, "error");
+    }
+  });
+
+  $("confirmV1ImportButton").addEventListener("click", async () => {
+    if (!pendingV1Import) {
+      showStatus("importStatus", "Preview a backup before confirming the import.", "error");
+      return;
+    }
+    const button = $("confirmV1ImportButton");
+    button.disabled = true;
+    button.textContent = "Importing…";
+    try {
+      const result = await api("/imports/v1/commit/", {
+        method: "POST",
+        body: {
+          backup: pendingV1Import.backup,
+          profile_id: pendingV1Import.profileId,
+          confirm: true
+        }
+      });
+      pendingV1Import = null;
+      $("v1BackupFile").value = "";
+      $("v1ImportPreview").hidden = true;
+      showStatus("importStatus", "Imported " + result.source_profile + " profile: " + result.counts.weight_entries + " weigh-ins, " + result.counts.food_entries + " food entries, and " + result.counts.body_measurements + " body measurements.", "success");
+      await loadData();
+    } catch (error) {
+      showStatus("importStatus", "Import failed: " + error.message, "error");
+      button.disabled = false;
+      button.textContent = "Confirm and import this profile";
+    }
+  });
+
   document.querySelectorAll("[data-scroll]").forEach((button) => {
     button.addEventListener("click", () => {
       const target = $(button.dataset.scroll);
