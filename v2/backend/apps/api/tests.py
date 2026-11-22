@@ -423,3 +423,44 @@ class TimedSessionPermissionsTests(APITestCase):
         )
         self.assertEqual(finished.status_code, 200, finished.data)
         self.assertIsNotNone(finished.data["ended_at"])
+
+
+class PersonalProfileMetricsApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("metrics@example.com", "long-metrics-password")
+
+    def test_user_can_read_and_update_body_goal_and_activity_settings(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            "/api/v1/profile/",
+            {
+                "age": 34,
+                "gender": "female",
+                "height_cm": "167.50",
+                "start_weight_kg": "78.00",
+                "current_weight_kg": "74.25",
+                "goal_weight_kg": "65.00",
+                "activity_multiplier": "1.55",
+                "daily_deficit_kcal": 350,
+                "diet_type": "mediterranean",
+                "workout_mode": "gym",
+                "fitness_level": "intermediate",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["age"], 34)
+        self.assertEqual(response.data["gender"], "female")
+        self.assertEqual(str(response.data["height_cm"]), "167.50")
+        self.assertEqual(str(response.data["current_weight_kg"]), "74.25")
+        self.assertEqual(response.data["workout_mode"], "gym")
+        self.assertEqual(response.data["fitness_level"], "intermediate")
+
+    def test_invalid_age_or_gender_is_rejected(self):
+        self.client.force_authenticate(user=self.user)
+        response = self.client.patch(
+            "/api/v1/profile/",
+            {"age": 140, "gender": "unknown"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
