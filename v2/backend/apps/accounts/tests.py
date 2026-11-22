@@ -8,7 +8,8 @@ class UserManagerTests(TestCase):
         user = User.objects.create_user("FitStart@Example.com", "a-long-test-password")
         self.assertEqual(user.email, "fitstart@example.com")
         self.assertTrue(user.check_password("a-long-test-password"))
-        self.assertFalse(hasattr(user, "username"))
+        self.assertEqual(user.USERNAME_FIELD, "email")
+        self.assertIsNone(user.username)
 
     def test_passwordless_user_has_unusable_password(self):
         user = User.objects.create_user("no-password@example.com")
