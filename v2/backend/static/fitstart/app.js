@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const state = { account: null, profile: null, households: [], weights: [], measures: [], foods: [], waters: [], meals: [], groceries: [], workouts: [], fastings: [], goals: [] };
+  const state = { account: null, profile: null, households: [], weights: [], measures: [], foods: [], waters: [], meals: [], groceries: [], groceryItems: {}, workouts: [], workoutSets: {}, fastings: [], goals: [] };
   const $ = (id) => document.getElementById(id);
 
   function cookie(name) {
@@ -150,6 +150,129 @@
     });
   }
 
+  function renderChildSelectors() {
+    const lists = $("groceryParentList");
+    const sessions = $("workoutParentSession");
+    [[lists, state.groceries], [sessions, state.workouts]].forEach(([select, records]) => {
+      if (!select) return;
+      const previous = select.value;
+      select.replaceChildren();
+      records.filter((record) => record.owner === state.account.id).forEach((record) => {
+        const option = document.createElement("option");
+        option.value = String(record.id);
+        option.textContent = record.name || record.title || ("Record " + record.id);
+        select.appendChild(option);
+      });
+      if ([...select.options].some((option) => option.value === previous)) select.value = previous;
+    });
+    if (lists) $("groceryItemButton").disabled = lists.options.length === 0;
+    if (sessions) $("workoutSetButton").disabled = sessions.options.length === 0;
+  }
+
+  async function loadChildRecords() {
+    const groceryPairs = await Promise.all(state.groceries.map(async (list) => [
+      list.id,
+      await api("/grocery-lists/" + list.id + "/items/")
+    ]));
+    const workoutPairs = await Promise.all(state.workouts.map(async (session) => [
+      session.id,
+      await api("/workout-sessions/" + session.id + "/sets/")
+    ]));
+    state.groceryItems = Object.fromEntries(groceryPairs);
+    state.workoutSets = Object.fromEntries(workoutPairs);
+  }
+
+  function renderGroceryItems() {
+    const host = $("groceryItemTable");
+    host.replaceChildren();
+    const lists = state.groceries;
+    const rows = lists.flatMap((list) => (state.groceryItems[list.id] || []).map((item) => ({ ...item, list })));
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No items yet. Choose a list above to add its first item.";
+      host.appendChild(empty);
+      return;
+    }
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const headRow = document.createElement("tr");
+    ["Done", "Item", "Quantity", "Category", "List"].forEach((text) => addCell(headRow, text));
+    head.appendChild(headRow);
+    table.appendChild(head);
+    const body = document.createElement("tbody");
+    rows.forEach((item) => {
+      const row = document.createElement("tr");
+      const statusCell = document.createElement("td");
+      const checkbox = document.createElement("input");
+      checkbox.type = "checkbox";
+      checkbox.checked = item.is_checked;
+      checkbox.disabled = item.list.owner !== state.account.id;
+      checkbox.setAttribute("aria-label", "Mark " + item.name + " as purchased");
+      checkbox.addEventListener("change", async () => {
+        checkbox.disabled = true;
+        try {
+          await api("/grocery-lists/" + item.grocery_list + "/items/" + item.id + "/", {
+            method: "PATCH", body: { is_checked: checkbox.checked }
+          });
+          await refreshRecords();
+        } catch (error) {
+          checkbox.checked = !checkbox.checked;
+          showStatus("groceryItemStatus", error.message, "error");
+        } finally {
+          checkbox.disabled = item.list.owner !== state.account.id;
+        }
+      });
+      statusCell.appendChild(checkbox);
+      row.appendChild(statusCell);
+      addCell(row, item.name);
+      addCell(row, item.quantity);
+      addCell(row, item.category);
+      addCell(row, item.list.name);
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    wrap.appendChild(table);
+    host.appendChild(wrap);
+  }
+
+  function renderWorkoutSets() {
+    const host = $("workoutSetTable");
+    host.replaceChildren();
+    const rows = state.workouts.flatMap((session) => (state.workoutSets[session.id] || []).map((set) => ({ ...set, sessionRecord: session })));
+    if (!rows.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = "No exercise sets logged yet.";
+      host.appendChild(empty);
+      return;
+    }
+    const table = document.createElement("table");
+    const head = document.createElement("thead");
+    const header = document.createElement("tr");
+    ["Workout", "Exercise", "Set", "Reps", "Load", "Duration"].forEach((text) => addCell(header, text));
+    head.appendChild(header);
+    table.appendChild(head);
+    const body = document.createElement("tbody");
+    rows.forEach((item) => {
+      const row = document.createElement("tr");
+      addCell(row, item.sessionRecord.title);
+      addCell(row, item.exercise_name);
+      addCell(row, item.set_number);
+      addCell(row, item.reps);
+      addCell(row, item.weight_kg == null ? "—" : item.weight_kg + " kg");
+      addCell(row, item.duration_seconds == null ? "—" : item.duration_seconds + " sec");
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    wrap.appendChild(table);
+    host.appendChild(wrap);
+  }
+
   function renderAll() {
     $("accountEmail").textContent = state.account.email;
     $("weightCount").textContent = String(state.weights.length);
@@ -158,6 +281,9 @@
     $("goalCount").textContent = String(state.goals.length);
     renderProfile();
     renderHouseholds();
+    renderChildSelectors();
+    renderGroceryItems();
+    renderWorkoutSets();
     renderTable("weightTable", [
       { label: "Date", value: (r) => r.measured_on },
       { label: "Weight", value: (r) => r.weight_kg + " kg" },
@@ -229,6 +355,7 @@
     state.workouts = workouts;
     state.fastings = fastings;
     state.goals = goals;
+    await loadChildRecords();
     renderAll();
     $("appLoading").hidden = true;
     $("appContent").hidden = false;
@@ -424,6 +551,7 @@
     state.weights = weights; state.measures = measures; state.foods = foods;
     state.waters = waters; state.meals = meals; state.groceries = groceries;
     state.workouts = workouts; state.fastings = fastings; state.goals = goals;
+    await loadChildRecords();
     renderAll();
   }
 
