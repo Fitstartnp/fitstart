@@ -615,19 +615,23 @@
   }
 
   async function loadCatalogs() {
+    const supportedStyles = ["balanced", "vegetarian", "high_protein", "low_carb"];
+    const dietStyle = supportedStyles.includes(state.profile.diet_type) ? state.profile.diet_type : "balanced";
+    const mode = state.profile.workout_mode === "gym" ? "gym" : "home";
+    const level = state.profile.fitness_level === "beginner" ? "beginner" : "intermediate";
+    $("recipeDiet").value = dietStyle;
+    $("routineMode").value = mode;
+    $("routineLevel").value = level;
     const [recipes, favorites, routines] = await Promise.all([
-      api("/recipes/?diet_style=" + encodeURIComponent(state.profile.diet_type || "balanced")),
+      api("/recipes/?diet_style=" + encodeURIComponent(dietStyle)),
       api("/recipes/favorites/"),
-      api("/workout-routines/?mode=" + encodeURIComponent(state.profile.workout_mode || "home") + "&level=" + encodeURIComponent(state.profile.fitness_level || "beginner"))
+      api("/workout-routines/?mode=" + encodeURIComponent(mode) + "&level=" + encodeURIComponent(level))
     ]);
     state.catalogRecipes = recipes;
     state.favoriteRecipeIds = new Set(favorites.map((item) => item.recipe.id));
     state.catalogRoutines = routines;
     renderRecipeCatalog();
     renderWorkoutCatalog();
-    $("recipeDiet").value = state.profile.diet_type || "balanced";
-    $("routineMode").value = state.profile.workout_mode || "home";
-    $("routineLevel").value = state.profile.fitness_level || "beginner";
   }
 
   async function loadData() {
@@ -704,6 +708,7 @@
     ].forEach((key) => { body[key] = form.get(key) === "on"; });
     state.profile = await api("/profile/", { method: "PATCH", body });
     renderProfile();
+    await loadCatalogs();
     showStatus("profileStatus", "Profile and sharing settings saved.", "success");
   });
 
