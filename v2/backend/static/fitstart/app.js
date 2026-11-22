@@ -1004,6 +1004,7 @@
     state.weights = weights; state.measures = measures; state.foods = foods;
     state.waters = waters; state.meals = meals; state.groceries = groceries;
     state.workouts = workouts; state.fastings = fastings; state.goals = goals;
+    state.profile = await api("/profile/");
     await loadChildRecords();
     renderAll();
   }
