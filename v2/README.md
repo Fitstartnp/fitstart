@@ -30,6 +30,7 @@ From the repository root:
     python manage.py makemigrations --check --dry-run
     python manage.py migrate
     python manage.py createsuperuser
+    python manage.py import_v1_catalog
     python manage.py test
     python manage.py runserver
 
