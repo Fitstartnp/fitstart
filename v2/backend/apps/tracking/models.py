@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 
 from apps.households.models import Household, HouseholdMembership
+from apps.profiles.models import PersonalProfile
 
 
 class PersonalRecord(models.Model):
@@ -41,8 +42,13 @@ class PersonalRecord(models.Model):
         ).exists()
         if not active_membership:
             raise ValidationError({"household": "The record owner must be an active member of the selected household."})
-        profile = getattr(self.owner, "personal_profile", None)
-        if not self.sharing_preference or not profile or not getattr(profile, self.sharing_preference, False):
+        profile_allows_sharing = False
+        if self.sharing_preference:
+            profile_allows_sharing = PersonalProfile.objects.filter(
+                user_id=self.owner_id,
+                **{self.sharing_preference: True},
+            ).exists()
+        if not profile_allows_sharing:
             raise ValidationError({"household": "The owner has not enabled sharing for this category."})
 
     @classmethod
