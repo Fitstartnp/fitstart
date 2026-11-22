@@ -346,12 +346,115 @@
     host.appendChild(wrap);
   }
 
+  function localDateForTimeZone(value, timeZone) {
+    const date = value ? new Date(value) : new Date();
+    try {
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: timeZone || "Europe/Berlin",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit"
+      }).formatToParts(date);
+      const map = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+      return map.year + "-" + map.month + "-" + map.day;
+    } catch (_) {
+      return date.toISOString().slice(0, 10);
+    }
+  }
+
+  function calculateNutritionTargets(profile) {
+    const weight = Number(profile.current_weight_kg);
+    const height = Number(profile.height_cm);
+    const age = Number(profile.age);
+    const sexOffset = profile.gender === "male" ? 5 : -161;
+    const bmr = 10 * weight + 6.25 * height - 5 * age + sexOffset;
+    const tdee = Math.round(bmr * Number(profile.activity_multiplier));
+    const weightDifference = weight - Number(profile.goal_weight_kg);
+    const requestedCalories = weightDifference > 0 ? tdee - Number(profile.daily_deficit_kcal) : tdee;
+    const minimumFloor = profile.gender === "male" ? 1400 : 1200;
+    const targetCalories = Math.max(minimumFloor, Math.round(requestedCalories));
+    const bmi = height > 0 ? weight / ((height / 100) ** 2) : 0;
+    const actualDeficit = Math.max(200, tdee - targetCalories);
+    const weeksToGoal = weightDifference > 0
+      ? Math.max(1, Math.round((weightDifference * 7700) / (actualDeficit * 7)))
+      : 0;
+    const waterLiters = Number((weight * 0.035).toFixed(1));
+    const waterGlasses = Math.max(6, Math.round((weight * 35) / 250));
+
+    let proteinRatio = 0.30, carbRatio = 0.40, fatRatio = 0.30;
+    if (profile.diet_type === "high_protein") {
+      proteinRatio = 0.38; carbRatio = 0.34; fatRatio = 0.28;
+    } else if (profile.diet_type === "low_carb") {
+      proteinRatio = 0.35; carbRatio = 0.20; fatRatio = 0.45;
+    } else if (profile.diet_type === "vegetarian") {
+      proteinRatio = 0.26; carbRatio = 0.46; fatRatio = 0.28;
+    }
+    return {
+      bmr: Math.round(bmr),
+      tdee,
+      targetCalories,
+      bmi: Number(bmi.toFixed(1)),
+      weeksToGoal,
+      waterLiters,
+      waterGlasses,
+      proteinGrams: Math.round((targetCalories * proteinRatio) / 4),
+      carbsGrams: Math.round((targetCalories * carbRatio) / 4),
+      fatGrams: Math.round((targetCalories * fatRatio) / 9),
+      fiberGrams: Math.round((targetCalories / 1000) * 14)
+    };
+  }
+
+  function renderProgressRow(host, label, consumed, target, unit) {
+    const row = document.createElement("div");
+    row.className = "progress-row";
+    const top = document.createElement("div");
+    top.className = "progress-heading";
+    const name = document.createElement("strong");
+    name.textContent = label;
+    const value = document.createElement("span");
+    value.textContent = Math.round(consumed) + " / " + Math.round(target) + " " + unit;
+    top.append(name, value);
+    const track = document.createElement("div");
+    track.className = "progress-track";
+    const fill = document.createElement("div");
+    fill.className = "progress-fill";
+    fill.style.width = Math.max(0, Math.min(100, target > 0 ? (consumed / target) * 100 : 0)) + "%";
+    track.appendChild(fill);
+    row.append(top, track);
+    host.appendChild(row);
+  }
+
+  function renderNutritionSummary() {
+    const metrics = calculateNutritionTargets(state.profile);
+    const today = localDateForTimeZone(null, state.profile.timezone_name);
+    const todayFoods = state.foods.filter((item) => localDateForTimeZone(item.logged_at, state.profile.timezone_name) === today);
+    const todayWater = state.waters.filter((item) => localDateForTimeZone(item.logged_at, state.profile.timezone_name) === today);
+    const sum = (rows, key) => rows.reduce((total, item) => total + (Number(item[key]) || 0), 0);
+    $("bmrEstimate").textContent = metrics.bmr.toLocaleString() + " kcal";
+    $("tdeeEstimate").textContent = metrics.tdee.toLocaleString() + " kcal";
+    $("calorieTargetEstimate").textContent = metrics.targetCalories.toLocaleString() + " kcal";
+    $("bmiEstimate").textContent = String(metrics.bmi);
+    $("goalTimelineEstimate").textContent = metrics.weeksToGoal
+      ? "Estimated time to goal: about " + metrics.weeksToGoal + " weeks at the selected deficit."
+      : "Your current weight is at or below the selected goal weight.";
+    const progress = $("nutritionProgress");
+    progress.replaceChildren();
+    renderProgressRow(progress, "Calories", sum(todayFoods, "calories_kcal"), metrics.targetCalories, "kcal");
+    renderProgressRow(progress, "Protein", sum(todayFoods, "protein_g"), metrics.proteinGrams, "g");
+    renderProgressRow(progress, "Carbohydrates", sum(todayFoods, "carbs_g"), metrics.carbsGrams, "g");
+    renderProgressRow(progress, "Fat", sum(todayFoods, "fat_g"), metrics.fatGrams, "g");
+    renderProgressRow(progress, "Fiber", sum(todayFoods, "fiber_g"), metrics.fiberGrams, "g");
+    renderProgressRow(progress, "Water", sum(todayWater, "amount_ml"), metrics.waterGlasses * 250, "ml");
+    $("waterTargetNote").textContent = "Estimated hydration guide: about " + metrics.waterLiters + " L (" + metrics.waterGlasses + " glasses of 250 ml) daily. Actual needs vary.";
+  }
+
   function renderAll() {
     $("accountEmail").textContent = state.account.email;
     $("weightCount").textContent = String(state.weights.length);
     $("foodCount").textContent = String(state.foods.length);
     $("workoutCount").textContent = String(state.workouts.length);
     $("goalCount").textContent = String(state.goals.length);
+    renderNutritionSummary();
     renderProfile();
     renderHouseholds();
     renderChildSelectors();
