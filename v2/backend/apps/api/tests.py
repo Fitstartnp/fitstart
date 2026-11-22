@@ -611,7 +611,7 @@ class V1BackupImportApiTests(APITestCase):
         self.assertTrue(profile.fasting_is_active)
         self.assertEqual(profile.fasting_elapsed_minutes, 540)
         self.assertTrue(profile.completed_exercises["squat"])
-        self.assertIn("deadlift", profile.legacy_workout_state.get("hevySetLogs", {}) or {"deadlift": []})
+        self.assertEqual(len(profile.legacy_workout_state.get("hevySetLogs", {}).get("squat", [])), 2)
 
         self.assertEqual(DataImportBatch.objects.filter(actor=self.user).count(), 1)
         self.assertNotIn(
