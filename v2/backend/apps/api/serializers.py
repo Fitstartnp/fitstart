@@ -133,7 +133,7 @@ class GoalSerializer(PersonalRecordSerializer):
 
 
 class GroceryItemSerializer(serializers.ModelSerializer):
-    grocery_list = serializers.IntegerField(read_only=True)
+    grocery_list = serializers.PrimaryKeyRelatedField(read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
 
     class Meta:
@@ -144,7 +144,7 @@ class GroceryItemSerializer(serializers.ModelSerializer):
 
 
 class WorkoutSetSerializer(serializers.ModelSerializer):
-    session = serializers.IntegerField(read_only=True)
+    session = serializers.PrimaryKeyRelatedField(read_only=True)
 
     class Meta:
         from apps.tracking.models import WorkoutSet
