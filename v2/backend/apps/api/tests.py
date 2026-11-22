@@ -464,3 +464,145 @@ class PersonalProfileMetricsApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400)
+
+
+class V1BackupImportApiTests(APITestCase):
+    def setUp(self):
+        self.user = User.objects.create_user("v1-import@example.com", "long-import-password")
+        self.backup = {
+            "unit": "metric",
+            "activeProfileId": "husband",
+            "profiles": {
+                "husband": {
+                    "name": "Alex",
+                    "age": 35,
+                    "gender": "male",
+                    "heightCm": 180,
+                    "startWeightKg": 100,
+                    "currentWeightKg": 95,
+                    "goalWeightKg": 85,
+                    "activityMultiplier": 1.55,
+                    "dailyDeficit": 400,
+                    "dietType": "balanced",
+                    "workoutMode": "gym",
+                    "fitnessLevel": "intermediate",
+                    "waterGlasses": 4,
+                    "weightLogs": [
+                        {"date": "2026-01-01", "weightKg": 100, "waistCm": 100, "note": "Start"},
+                        {"date": "2026-02-01", "weightKg": 95, "waistCm": 96, "note": "Latest"},
+                    ],
+                    "foodDiary": [
+                        {"name": "Oats", "kcal": 450, "p": 20, "c": 60, "f": 10, "fib": 8},
+                    ],
+                    "completedExercises": {"squat": True},
+                },
+                "wife": {
+                    "name": "Partner",
+                    "age": 29,
+                    "gender": "female",
+                    "heightCm": 165,
+                    "startWeightKg": 72,
+                    "currentWeightKg": 70,
+                    "goalWeightKg": 62,
+                    "waterGlasses": 2,
+                    "weightLogs": [
+                        {"date": "2026-01-01", "weightKg": 72, "waistCm": 80, "note": "Partner start"},
+                    ],
+                    "foodDiary": [
+                        {"name": "Yogurt", "kcal": 160, "p": 12, "c": 15, "f": 5, "fib": 1},
+                    ],
+                },
+            },
+            # This is deliberately not imported or persisted.
+            "cloudConfig": {"token": "DO_NOT_IMPORT_THIS_TOKEN"},
+        }
+
+    def test_preview_only_reports_selected_profile_and_does_not_write(self):
+        from apps.tracking.models import FoodEntry, WeightEntry
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/imports/v1/preview/",
+            {"backup": self.backup, "profile_id": "husband"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.data["source_profile"], "husband")
+        self.assertEqual(response.data["counts"]["weight_entries"], 2)
+        self.assertEqual(response.data["counts"]["food_entries"], 1)
+        self.assertEqual(response.data["counts"]["water_glasses"], 4)
+        self.assertIn("completedExercises", response.data["unsupported_fields"])
+        self.assertFalse(response.data["already_imported"])
+        self.assertEqual(WeightEntry.objects.filter(owner=self.user).count(), 0)
+        self.assertEqual(FoodEntry.objects.filter(owner=self.user).count(), 0)
+
+    def test_commit_imports_only_selected_profile_and_is_idempotent(self):
+        from apps.audit.models import DataImportBatch
+        from apps.profiles.models import PersonalProfile
+        from apps.tracking.models import BodyMeasurement, FoodEntry, WaterEntry, WeightEntry
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/imports/v1/commit/",
+            {"backup": self.backup, "profile_id": "husband", "confirm": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        self.assertEqual(response.data["source_profile"], "husband")
+        self.assertEqual(WeightEntry.objects.filter(owner=self.user).count(), 2)
+        self.assertEqual(FoodEntry.objects.filter(owner=self.user).count(), 1)
+        self.assertEqual(BodyMeasurement.objects.filter(owner=self.user).count(), 2)
+        self.assertEqual(WaterEntry.objects.get(owner=self.user).amount_ml, 1000)
+
+        profile = PersonalProfile.objects.get(user=self.user)
+        self.assertEqual(profile.display_name, "Alex")
+        self.assertEqual(profile.age, 35)
+        self.assertEqual(profile.height_cm, 180)
+        self.assertEqual(profile.goal_weight_kg, 85)
+        self.assertEqual(profile.workout_mode, "gym")
+
+        self.assertEqual(DataImportBatch.objects.filter(actor=self.user).count(), 1)
+        self.assertNotIn(
+            "DO_NOT_IMPORT_THIS_TOKEN",
+            str(list(DataImportBatch.objects.filter(actor=self.user).values())),
+        )
+
+        duplicate = self.client.post(
+            "/api/v1/imports/v1/commit/",
+            {"backup": self.backup, "profile_id": "husband", "confirm": True},
+            format="json",
+        )
+        self.assertEqual(duplicate.status_code, 409)
+        self.assertEqual(WeightEntry.objects.filter(owner=self.user).count(), 2)
+
+    def test_other_partner_profile_can_be_imported_separately_without_mixing(self):
+        from apps.profiles.models import PersonalProfile
+        from apps.tracking.models import FoodEntry, WeightEntry
+
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            "/api/v1/imports/v1/commit/",
+            {"backup": self.backup, "profile_id": "wife", "confirm": True},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 201, response.data)
+        profile = PersonalProfile.objects.get(user=self.user)
+        self.assertEqual(profile.display_name, "Partner")
+        self.assertEqual(profile.gender, "female")
+        self.assertEqual(list(WeightEntry.objects.filter(owner=self.user).values_list("weight_kg", flat=True)), [72])
+        self.assertEqual(FoodEntry.objects.get(owner=self.user).food_name, "Yogurt")
+
+    def test_commit_requires_confirmation_and_valid_profile_choice(self):
+        self.client.force_authenticate(user=self.user)
+        no_confirm = self.client.post(
+            "/api/v1/imports/v1/commit/",
+            {"backup": self.backup, "profile_id": "husband"},
+            format="json",
+        )
+        self.assertEqual(no_confirm.status_code, 400)
+        invalid_profile = self.client.post(
+            "/api/v1/imports/v1/preview/",
+            {"backup": self.backup, "profile_id": "both"},
+            format="json",
+        )
+        self.assertEqual(invalid_profile.status_code, 400)
