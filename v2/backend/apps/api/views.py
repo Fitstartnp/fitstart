@@ -8,7 +8,7 @@ from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import permissions
+from rest_framework import permissions, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,6 +18,28 @@ from apps.audit.models import AuditEvent
 from apps.households.models import Household, HouseholdInvitation, HouseholdMembership
 from apps.households.services import accept_invitation, create_household, create_invitation
 from apps.profiles.models import PersonalProfile
+from apps.tracking.models import (
+    BodyMeasurement,
+    FastingSession,
+    FoodEntry,
+    Goal,
+    GroceryList,
+    MealPlanEntry,
+    WaterEntry,
+    WeightEntry,
+    WorkoutSession,
+)
+from .serializers import (
+    BodyMeasurementSerializer,
+    FastingSessionSerializer,
+    FoodEntrySerializer,
+    GoalSerializer,
+    GroceryListSerializer,
+    MealPlanEntrySerializer,
+    WaterEntrySerializer,
+    WeightEntrySerializer,
+    WorkoutSessionSerializer,
+)
 
 
 class HealthView(APIView):
@@ -212,3 +234,132 @@ class AcceptInvitationView(APIView):
             },
             status=201,
         )
+
+
+class PersonalRecordViewSet(viewsets.ModelViewSet):
+    """Shared reads are allowed by category policy; mutations remain owner-only."""
+
+    permission_classes = [permissions.IsAuthenticated]
+    record_model = None
+
+    def get_queryset(self):
+        model = self.record_model
+        queryset = model.objects.select_related("owner", "household")
+        if self.action in ("update", "partial_update", "destroy"):
+            return queryset.filter(owner=self.request.user)
+        return model.visible_to(self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
+
+
+class WeightEntryViewSet(PersonalRecordViewSet):
+    record_model = WeightEntry
+    serializer_class = WeightEntrySerializer
+
+
+class BodyMeasurementViewSet(PersonalRecordViewSet):
+    record_model = BodyMeasurement
+    serializer_class = BodyMeasurementSerializer
+
+
+class FoodEntryViewSet(PersonalRecordViewSet):
+    record_model = FoodEntry
+    serializer_class = FoodEntrySerializer
+
+
+class WaterEntryViewSet(PersonalRecordViewSet):
+    record_model = WaterEntry
+    serializer_class = WaterEntrySerializer
+
+
+class MealPlanEntryViewSet(PersonalRecordViewSet):
+    record_model = MealPlanEntry
+    serializer_class = MealPlanEntrySerializer
+
+
+class GroceryListViewSet(PersonalRecordViewSet):
+    record_model = GroceryList
+    serializer_class = GroceryListSerializer
+
+
+class WorkoutSessionViewSet(PersonalRecordViewSet):
+    record_model = WorkoutSession
+    serializer_class = WorkoutSessionSerializer
+
+
+class FastingSessionViewSet(PersonalRecordViewSet):
+    record_model = FastingSession
+    serializer_class = FastingSessionSerializer
+
+
+class GoalViewSet(PersonalRecordViewSet):
+    record_model = Goal
+    serializer_class = GoalSerializer
+
+
+class MyProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
+        return Response(
+            {
+                "display_name": profile.display_name,
+                "unit_system": profile.unit_system,
+                "timezone_name": profile.timezone_name,
+                "sharing": {
+                    "meal_plans": profile.share_meal_plans,
+                    "grocery_lists": profile.share_grocery_lists,
+                    "workout_plans": profile.share_workout_plans,
+                    "workout_history": profile.share_workout_history,
+                    "weight_history": profile.share_weight_history,
+                    "body_measurements": profile.share_body_measurements,
+                    "food_diary": profile.share_food_diary,
+                    "water_logs": profile.share_water_logs,
+                    "fasting_sessions": profile.share_fasting_sessions,
+                    "goals": profile.share_goals,
+                },
+            }
+        )
+
+    def patch(self, request):
+        allowed = {
+            "display_name": "display_name",
+            "unit_system": "unit_system",
+            "timezone_name": "timezone_name",
+            "share_meal_plans": "share_meal_plans",
+            "share_grocery_lists": "share_grocery_lists",
+            "share_workout_plans": "share_workout_plans",
+            "share_workout_history": "share_workout_history",
+            "share_weight_history": "share_weight_history",
+            "share_body_measurements": "share_body_measurements",
+            "share_food_diary": "share_food_diary",
+            "share_water_logs": "share_water_logs",
+            "share_fasting_sessions": "share_fasting_sessions",
+            "share_goals": "share_goals",
+        }
+        unknown = set(request.data.keys()) - set(allowed)
+        if unknown:
+            raise ValidationError({"detail": f"Unsupported profile fields: {', '.join(sorted(unknown))}"})
+        profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
+        for field in allowed:
+            if field not in request.data:
+                continue
+            value = request.data[field]
+            if field.startswith("share_") and not isinstance(value, bool):
+                raise ValidationError({field: "Sharing settings must be true or false."})
+            if field == "display_name" and (not isinstance(value, str) or len(value) > 80):
+                raise ValidationError({field: "Display name must be 80 characters or fewer."})
+            if field == "unit_system" and value not in ("metric", "imperial"):
+                raise ValidationError({field: "Unit system must be metric or imperial."})
+            if field == "timezone_name":
+                from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+                try:
+                    ZoneInfo(value)
+                except (ZoneInfoNotFoundError, TypeError):
+                    raise ValidationError({field: "Enter a valid IANA time zone."})
+            setattr(profile, field, value)
+        profile.full_clean()
+        profile.save()
+        return self.get(request)
