@@ -1,7 +1,7 @@
 import hashlib
 import json
 from datetime import datetime, time
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
 from django.contrib.auth import login
@@ -528,6 +528,21 @@ def _v1_decimal(value, *, minimum=Decimal("0"), maximum=Decimal("1000000")):
     return result
 
 
+def _v1_int(value, *, minimum=0, maximum=1000000):
+    if isinstance(value, bool):
+        return None
+    try:
+        number = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not number.is_finite() or number != number.to_integral_value():
+        return None
+    result = int(number)
+    if result < minimum or result > maximum:
+        return None
+    return result
+
+
 def _v1_import_plan(request, *, backup, profile_id):
     if not isinstance(backup, dict) or not isinstance(backup.get("profiles"), dict):
         raise ValidationError({"backup": "Choose a valid FitStart V1 JSON backup containing profiles."})
@@ -628,6 +643,189 @@ def _v1_import_plan(request, *, backup, profile_id):
         else:
             profile_updates[target] = value
 
+    # Preserve the V1 meal-plan and workout-plan selections instead of resetting them.
+    meal_index = _v1_int(raw.get("mealVariationIndex", 0), maximum=9999)
+    workout_index = _v1_int(raw.get("workoutVariationIndex", 0), maximum=9999)
+    if meal_index is not None:
+        profile_updates["meal_variation_index"] = meal_index
+    else:
+        invalid_profile_fields.append("mealVariationIndex")
+    if workout_index is not None:
+        profile_updates["workout_variation_index"] = workout_index
+    else:
+        invalid_profile_fields.append("workoutVariationIndex")
+
+    slot_offsets = raw.get("slotOffsets", {})
+    if isinstance(slot_offsets, dict):
+        clean_slots = {}
+        for slot in ("Breakfast", "Lunch", "Snack", "Dinner"):
+            offset = _v1_int(slot_offsets.get(slot, 0), maximum=9999)
+            if offset is not None:
+                clean_slots[slot] = offset
+        profile_updates["slot_offsets"] = clean_slots
+    elif "slotOffsets" in raw:
+        invalid_profile_fields.append("slotOffsets")
+
+    exercise_offsets = raw.get("exOffsets", {})
+    if isinstance(exercise_offsets, dict):
+        clean_exercise_offsets = {}
+        for key, value in list(exercise_offsets.items())[:5]:
+            index = _v1_int(key, maximum=4)
+            offset = _v1_int(value, maximum=9999)
+            if index is not None and offset is not None:
+                clean_exercise_offsets[str(index)] = offset
+        profile_updates["exercise_offsets"] = clean_exercise_offsets
+    elif "exOffsets" in raw:
+        invalid_profile_fields.append("exOffsets")
+
+    completed_raw = raw.get("completedExercises", {})
+    completed_exercises = {}
+    if isinstance(completed_raw, dict):
+        completed_exercises = {
+            str(key)[:100]: value is True
+            for key, value in list(completed_raw.items())[:500]
+            if str(key).strip()
+        }
+        profile_updates["completed_exercises"] = completed_exercises
+    elif "completedExercises" in raw:
+        invalid_profile_fields.append("completedExercises")
+
+    streak = _v1_int(raw.get("streakCount", 1), maximum=100000)
+    if streak is not None:
+        profile_updates["streak_count"] = max(1, streak)
+    elif "streakCount" in raw:
+        invalid_profile_fields.append("streakCount")
+
+    if "lastActiveDate" in raw:
+        try:
+            profile_updates["last_active_date"] = datetime.strptime(
+                str(raw["lastActiveDate"]), "%Y-%m-%d"
+            ).date()
+        except (TypeError, ValueError):
+            invalid_profile_fields.append("lastActiveDate")
+
+    fasting_raw = raw.get("fastingState")
+    if fasting_raw is not None:
+        if isinstance(fasting_raw, dict):
+            protocol = _v1_int(fasting_raw.get("protocolHours", 16), minimum=1, maximum=24)
+            elapsed = _v1_int(fasting_raw.get("elapsedMinutes", 0), maximum=1440)
+            is_active = fasting_raw.get("isFasting", False)
+            if protocol is None or elapsed is None or not isinstance(is_active, bool):
+                invalid_profile_fields.append("fastingState")
+            else:
+                profile_updates["fasting_protocol_hours"] = protocol
+                profile_updates["fasting_elapsed_minutes"] = elapsed
+                profile_updates["fasting_is_active"] = is_active
+        else:
+            invalid_profile_fields.append("fastingState")
+
+    selected_day = _v1_int(backup.get("selectedDayIndex", 0), maximum=6)
+    if selected_day is not None:
+        profile_updates["selected_day_index"] = selected_day
+
+    favorite_raw = raw.get("favoriteMeals", {})
+    favorite_names = []
+    if isinstance(favorite_raw, dict):
+        favorite_names = sorted({
+            str(name).strip()[:180]
+            for name, selected in list(favorite_raw.items())[:500]
+            if selected is True and str(name).strip()
+        })
+    elif "favoriteMeals" in raw:
+        invalid_profile_fields.append("favoriteMeals")
+
+    matched_recipes = list(Recipe.objects.filter(name__in=favorite_names).only("id", "name"))
+    matched_names = {recipe.name for recipe in matched_recipes}
+    pending_favorite_names = [name for name in favorite_names if name not in matched_names]
+    profile_updates["legacy_favorite_recipe_names"] = pending_favorite_names
+
+    raw_set_logs = raw.get("hevySetLogs", {})
+    if not isinstance(raw_set_logs, dict):
+        raw_set_logs = {}
+        invalid_profile_fields.append("hevySetLogs")
+    if len(raw_set_logs) > 500:
+        raise ValidationError({"backup": "The V1 workout set log exceeds the 500-exercise import limit."})
+
+    clean_legacy_set_logs = {}
+    workout_sets = []
+    invalid_workout_sets = 0
+    backup_unit = backup.get("unit", "metric")
+    exercise_names = dict(
+        Exercise.objects.filter(source_key__in=[str(key)[:100] for key in raw_set_logs])
+        .values_list("source_key", "name")
+    )
+
+    for exercise_key_raw, set_rows in raw_set_logs.items():
+        exercise_key = str(exercise_key_raw).strip()[:100]
+        if not exercise_key or not isinstance(set_rows, list):
+            invalid_workout_sets += 1
+            continue
+        if len(set_rows) > 50:
+            invalid_workout_sets += len(set_rows) - 50
+            set_rows = set_rows[:50]
+        clean_rows = []
+        used_set_numbers = set()
+        for position, set_row in enumerate(set_rows, start=1):
+            if not isinstance(set_row, dict):
+                invalid_workout_sets += 1
+                continue
+            set_number = _v1_int(set_row.get("setNum", position), minimum=1, maximum=99)
+            reps = _v1_int(set_row.get("reps"), maximum=2000) if set_row.get("reps") is not None else None
+            weight = _v1_decimal(set_row.get("weight"), minimum=Decimal("0"), maximum=Decimal("10000"))
+            if set_number is None or set_number in used_set_numbers:
+                invalid_workout_sets += 1
+                continue
+            used_set_numbers.add(set_number)
+            weight_kg = weight
+            if weight_kg is not None and backup_unit == "imperial":
+                weight_kg = (weight_kg / Decimal("2.20462")).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            done = set_row.get("done") is True
+            set_type = str(set_row.get("type", "working"))[:20]
+            clean_row = {
+                "set_number": set_number,
+                "reps": reps,
+                "weight_kg": weight_kg,
+                "set_type": set_type or "working",
+                "is_completed": done or completed_exercises.get(exercise_key, False),
+            }
+            clean_rows.append({
+                "setNum": set_number,
+                "reps": reps,
+                "weight": weight_kg,
+                "type": clean_row["set_type"],
+                "done": clean_row["is_completed"],
+            })
+            workout_sets.append({
+                "exercise_key": exercise_key,
+                "exercise_name": exercise_names.get(exercise_key, exercise_key)[:180],
+                **clean_row,
+            })
+        if clean_rows:
+            clean_legacy_set_logs[exercise_key] = clean_rows
+
+    # V1 checked exercise cards may exist even when no detailed Hevy set array was saved.
+    for exercise_key, is_done in completed_exercises.items():
+        if is_done and exercise_key not in clean_legacy_set_logs:
+            exercise_name = exercise_names.get(exercise_key, exercise_key)[:180]
+            workout_sets.append({
+                "exercise_key": exercise_key,
+                "exercise_name": exercise_name,
+                "set_number": 1,
+                "reps": None,
+                "weight_kg": None,
+                "set_type": "legacy-completed",
+                "is_completed": True,
+            })
+
+    has_completed_workout = any(row["is_completed"] for row in workout_sets)
+    if not has_completed_workout:
+        workout_sets = []
+
+    profile_updates["legacy_workout_state"] = {
+        "hevySetLogs": clean_legacy_set_logs,
+        "completedExercises": completed_exercises,
+    }
+
     unit = backup.get("unit")
     if unit in ("metric", "imperial"):
         profile_updates["unit_system"] = unit
@@ -636,6 +834,9 @@ def _v1_import_plan(request, *, backup, profile_id):
         "name", "age", "gender", "heightCm", "startWeightKg", "currentWeightKg",
         "goalWeightKg", "activityMultiplier", "dailyDeficit", "dietType",
         "workoutMode", "fitnessLevel", "waterGlasses", "foodDiary", "weightLogs",
+        "mealVariationIndex", "slotOffsets", "workoutVariationIndex", "exOffsets",
+        "completedExercises", "streakCount", "lastActiveDate", "fastingState",
+        "favoriteMeals", "hevySetLogs",
     }
     unsupported = sorted(
         key for key, value in raw.items()
@@ -650,6 +851,14 @@ def _v1_import_plan(request, *, backup, profile_id):
     fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
     duplicate = DataImportBatch.objects.filter(actor=request.user, fingerprint=fingerprint).exists()
 
+    existing_favorite_ids = set(
+        RecipeFavorite.objects.filter(
+            user=request.user,
+            recipe_id__in=[recipe.pk for recipe in matched_recipes],
+        ).values_list("recipe_id", flat=True)
+    )
+    new_favorite_ids = [recipe.pk for recipe in matched_recipes if recipe.pk not in existing_favorite_ids]
+
     return {
         "profile_id": profile_id,
         "fingerprint": fingerprint,
@@ -658,6 +867,10 @@ def _v1_import_plan(request, *, backup, profile_id):
         "measurements": measurements,
         "foods": foods,
         "water_ml": glasses * 250,
+        "workout_sets": workout_sets,
+        "favorite_recipe_ids": new_favorite_ids,
+        "pending_favorite_names": pending_favorite_names,
+        "invalid_workout_sets": invalid_workout_sets,
         "invalid_weights": invalid_weights,
         "invalid_foods": invalid_foods,
         "invalid_profile_fields": invalid_profile_fields,
@@ -669,92 +882,12 @@ def _v1_import_plan(request, *, backup, profile_id):
             "food_entries": len(foods),
             "water_glasses": glasses,
             "water_ml_estimate": glasses * 250,
+            "workout_sessions": 1 if workout_sets else 0,
+            "workout_sets": len(workout_sets),
+            "recipe_favorites": len(new_favorite_ids),
+            "unmatched_favorite_names": len(pending_favorite_names),
         },
     }
-
-
-class MyDataExportView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        profile, _ = PersonalProfile.objects.get_or_create(user=user)
-
-        def serialize(queryset, serializer_class):
-            return serializer_class(queryset, many=True).data
-
-        weight_records = WeightEntry.objects.filter(owner=user).order_by("measured_on", "id")
-        body_records = BodyMeasurement.objects.filter(owner=user).order_by("measured_at", "id")
-        food_records = FoodEntry.objects.filter(owner=user).order_by("logged_at", "id")
-        water_records = WaterEntry.objects.filter(owner=user).order_by("logged_at", "id")
-        meal_records = MealPlanEntry.objects.filter(owner=user).order_by("plan_date", "id")
-        grocery_records = GroceryList.objects.filter(owner=user).prefetch_related("items")
-        workout_records = WorkoutSession.objects.filter(owner=user).prefetch_related("sets")
-        fasting_records = FastingSession.objects.filter(owner=user).order_by("started_at", "id")
-        goal_records = Goal.objects.filter(owner=user).order_by("created_at", "id")
-
-        payload = {
-            "format": "fitstart-v2-export",
-            "version": 1,
-            "exported_at": timezone.now(),
-            "account": {"email": user.email},
-            "profile": {
-                "display_name": profile.display_name,
-                "unit_system": profile.unit_system,
-                "timezone_name": profile.timezone_name,
-                "age": profile.age,
-                "gender": profile.gender,
-                "height_cm": profile.height_cm,
-                "start_weight_kg": profile.start_weight_kg,
-                "current_weight_kg": profile.current_weight_kg,
-                "goal_weight_kg": profile.goal_weight_kg,
-                "activity_multiplier": profile.activity_multiplier,
-                "daily_deficit_kcal": profile.daily_deficit_kcal,
-                "diet_type": profile.diet_type,
-                "workout_mode": profile.workout_mode,
-                "fitness_level": profile.fitness_level,
-                "sharing": {
-                    "meal_plans": profile.share_meal_plans,
-                    "grocery_lists": profile.share_grocery_lists,
-                    "workout_plans": profile.share_workout_plans,
-                    "workout_history": profile.share_workout_history,
-                    "weight_history": profile.share_weight_history,
-                    "body_measurements": profile.share_body_measurements,
-                    "food_diary": profile.share_food_diary,
-                    "water_logs": profile.share_water_logs,
-                    "fasting_sessions": profile.share_fasting_sessions,
-                    "goals": profile.share_goals,
-                },
-            },
-            "records": {
-                "weight_entries": serialize(weight_records, WeightEntrySerializer),
-                "body_measurements": serialize(body_records, BodyMeasurementSerializer),
-                "food_entries": serialize(food_records, FoodEntrySerializer),
-                "water_entries": serialize(water_records, WaterEntrySerializer),
-                "meal_plan_entries": serialize(meal_records, MealPlanEntrySerializer),
-                "grocery_lists": [
-                    {
-                        **GroceryListSerializer(item).data,
-                        "items": GroceryItemSerializer(item.items.all(), many=True).data,
-                    }
-                    for item in grocery_records
-                ],
-                "workout_sessions": [
-                    {
-                        **WorkoutSessionSerializer(item).data,
-                        "sets": WorkoutSetSerializer(item.sets.all(), many=True).data,
-                    }
-                    for item in workout_records
-                ],
-                "fasting_sessions": serialize(fasting_records, FastingSessionSerializer),
-                "goals": serialize(goal_records, GoalSerializer),
-            },
-        }
-        response = Response(payload)
-        response["Content-Disposition"] = 'attachment; filename="fitstart-v2-export.json"'
-        response["Cache-Control"] = "no-store"
-        return response
-
 
 class V1ImportPreviewView(APIView):
     permission_classes = [permissions.IsAuthenticated]
