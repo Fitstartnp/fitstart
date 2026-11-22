@@ -133,6 +133,17 @@
     $("displayName").value = profile.display_name || "";
     $("unitSystem").value = profile.unit_system;
     $("timezoneName").value = profile.timezone_name;
+    $("profileAge").value = profile.age;
+    $("profileGender").value = profile.gender;
+    $("profileHeight").value = profile.height_cm;
+    $("profileStartWeight").value = profile.start_weight_kg;
+    $("profileCurrentWeight").value = profile.current_weight_kg;
+    $("profileGoalWeight").value = profile.goal_weight_kg;
+    $("profileActivity").value = profile.activity_multiplier;
+    $("profileDeficit").value = profile.daily_deficit_kcal;
+    $("profileDiet").value = profile.diet_type;
+    $("profileWorkoutMode").value = profile.workout_mode;
+    $("profileFitnessLevel").value = profile.fitness_level;
     const mapping = {
       share_weight_history: "shareWeightHistory",
       share_body_measurements: "shareBodyMeasurements",
@@ -440,7 +451,18 @@
     const body = {
       display_name: form.get("display_name"),
       unit_system: form.get("unit_system"),
-      timezone_name: form.get("timezone_name")
+      timezone_name: form.get("timezone_name"),
+      age: Number(form.get("age")),
+      gender: form.get("gender"),
+      height_cm: Number(form.get("height_cm")),
+      start_weight_kg: Number(form.get("start_weight_kg")),
+      current_weight_kg: Number(form.get("current_weight_kg")),
+      goal_weight_kg: Number(form.get("goal_weight_kg")),
+      activity_multiplier: Number(form.get("activity_multiplier")),
+      daily_deficit_kcal: Number(form.get("daily_deficit_kcal")),
+      diet_type: form.get("diet_type"),
+      workout_mode: form.get("workout_mode"),
+      fitness_level: form.get("fitness_level")
     };
     [
       "share_weight_history", "share_body_measurements", "share_food_diary",
