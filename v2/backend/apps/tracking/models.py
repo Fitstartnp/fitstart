@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
-from django.db.models import Q
+from django.db.models import Exists, OuterRef, Q
 from django.utils import timezone
 
 from apps.households.models import Household, HouseholdMembership
@@ -59,13 +59,23 @@ class PersonalRecord(models.Model):
         sharing = cls.sharing_preference
         if not sharing:
             return cls.objects.filter(owner=user)
-        shared = Q(
-            household__memberships__user=user,
-            household__memberships__status=HouseholdMembership.Status.ACTIVE,
-            owner__personal_profile__isnull=False,
-            **{f"owner__personal_profile__{sharing}": True},
+        owner_membership = HouseholdMembership.objects.filter(
+            household_id=OuterRef("household_id"),
+            user_id=OuterRef("owner_id"),
+            status=HouseholdMembership.Status.ACTIVE,
         )
-        return cls.objects.filter(Q(owner=user) | shared).distinct()
+        shared_ids = (
+            cls.objects.annotate(_owner_is_active_member=Exists(owner_membership))
+            .filter(
+                household__memberships__user=user,
+                household__memberships__status=HouseholdMembership.Status.ACTIVE,
+                _owner_is_active_member=True,
+                owner__personal_profile__isnull=False,
+                **{f"owner__personal_profile__{sharing}": True},
+            )
+            .values("pk")
+        )
+        return cls.objects.filter(Q(owner=user) | Q(pk__in=shared_ids)).distinct()
 
 
 class WeightEntry(PersonalRecord):
