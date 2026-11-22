@@ -1,6 +1,6 @@
 Django==5.2.19
 djangorestframework==3.18.3
-psycopg[binary]>=3.2,<4
-argon2-cffi>=23.1,<26
+psycopg[binary]==3.3.9
+argon2-cffi==25.1.0
 waitress==3.0.2
-whitenoise>=6.8,<7
+whitenoise==6.12.0
