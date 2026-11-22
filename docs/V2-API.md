@@ -55,6 +55,22 @@ Invitation notes:
 - Tokens expire after seven days, are single-use, and are never returned in API responses.
 - Production must configure SMTP/email. The production settings deliberately refuse console email mode.
 
+## V1 backup migration
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/imports/v1/preview/` | Validate one selected profile from a V1 JSON backup and report import counts |
+| POST | `/api/v1/imports/v1/commit/` | Import the selected profile after explicit confirmation |
+
+Both endpoints require an authenticated session and CSRF token. The request body contains:
+- `backup`: the parsed V1 `fitstart-progress-backup.json` object.
+- `profile_id`: `husband` or `wife`.
+- `confirm`: `true` on the commit endpoint only.
+
+The importer maps profile/body settings, V1 weigh-ins, waist measurements attached to weigh-ins, food diary entries, and the current V1 water-glass count. It uses 250 ml per V1 glass as an estimate. V1 food entries did not contain timestamps, so imported food rows receive the import timestamp. Existing V2 logs are preserved and new rows are appended. The selected profile settings are updated on the current V2 account.
+
+The importer does not import GitHub/Gist credentials. It does not import the other partner's profile. It reports unsupported V1 fields such as detailed exercise completions, workout set logs, favourites, and fasting state; these remain to be migrated separately. The server stores only an import fingerprint and aggregate counts, not the original backup JSON. A repeat of the exact same selected profile backup in the same account returns HTTP 409.
+
 ## Personal activity resources
 
 Each resource supports:
