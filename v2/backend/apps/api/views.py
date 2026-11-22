@@ -1236,7 +1236,10 @@ class V1ImportCommitView(APIView):
                 profile_id=request.data.get("profile_id"),
             )
             if plan["duplicate"]:
-                return Response({"detail": "This exact V1 profile backup has already been imported into this account."}, status=409)
+                return Response(
+                    {"detail": "This exact V1 profile backup has already been imported into this account."},
+                    status=409,
+                )
 
             profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
             for field, value in plan["profile_updates"].items():
@@ -1265,6 +1268,12 @@ class V1ImportCommitView(APIView):
                 for entry in plan["foods"]
             ])
             if plan["water_ml"] > 0:
+                WaterEntry.objects.create(
+                    owner=request.user,
+                    amount_ml=plan["water_ml"],
+                    logged_at=import_time,
+                )
+
             if plan["workout_sets"]:
                 workout = WorkoutSession.objects.create(
                     owner=request.user,
@@ -1276,6 +1285,7 @@ class V1ImportCommitView(APIView):
                 WorkoutSet.objects.bulk_create([
                     WorkoutSet(session=workout, **entry) for entry in plan["workout_sets"]
                 ])
+
             if plan["favorite_recipe_ids"]:
                 RecipeFavorite.objects.bulk_create(
                     [
@@ -1284,8 +1294,6 @@ class V1ImportCommitView(APIView):
                     ],
                     ignore_conflicts=True,
                 )
-
-                WaterEntry.objects.create(owner=request.user, amount_ml=plan["water_ml"], logged_at=import_time)
 
             batch = DataImportBatch.objects.create(
                 actor=request.user,
@@ -1301,18 +1309,22 @@ class V1ImportCommitView(APIView):
                 metadata={"source_profile": plan["profile_id"], **plan["counts"]},
             )
 
-        return Response({
-            "detail": "V1 profile imported.",
-            "source_profile": plan["profile_id"],
-            "counts": plan["counts"],
-            "unsupported_fields": plan["unsupported_fields"],
-            "invalid_entries_skipped": {
-                "weight_logs": plan["invalid_weights"],
-                "food_diary": plan["invalid_foods"],
-                "profile_fields": plan["invalid_profile_fields"],
+        return Response(
+            {
+                "detail": "V1 profile imported.",
+                "source_profile": plan["profile_id"],
+                "counts": plan["counts"],
+                "unsupported_fields": plan["unsupported_fields"],
+                "invalid_entries_skipped": {
+                    "weight_logs": plan["invalid_weights"],
+                    "food_diary": plan["invalid_foods"],
+                    "workout_sets": plan["invalid_workout_sets"],
+                    "profile_fields": plan["invalid_profile_fields"],
+                },
+                "unmatched_favorite_names": plan["pending_favorite_names"],
             },
-            "unmatched_favorite_names": plan["pending_favorite_names"],
-        }, status=201)
+            status=201,
+        )
 
 
 class RecipeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
