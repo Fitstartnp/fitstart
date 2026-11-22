@@ -19,7 +19,7 @@ from apps.tracking.models import (
 
 
 class PersonalRecordSerializer(serializers.ModelSerializer):
-    owner = serializers.IntegerField(read_only=True)
+    owner = serializers.PrimaryKeyRelatedField(read_only=True)
     household = serializers.PrimaryKeyRelatedField(
         queryset=Household.objects.none(),
         required=False,
