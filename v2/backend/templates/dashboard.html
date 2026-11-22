@@ -31,6 +31,8 @@
     </section>
     <nav class="tabs" aria-label="Dashboard sections">
       <button class="tablink" aria-pressed="true" data-scroll="recordsPanel">Activity</button>
+      <button class="tablink" aria-pressed="false" data-scroll="catalogPanel">Recipes</button>
+      <button class="tablink" aria-pressed="false" data-scroll="routinePanel">Workout library</button>
       <button class="tablink" aria-pressed="false" data-scroll="profilePanel">Profile & privacy</button>
       <button class="tablink" aria-pressed="false" data-scroll="householdPanel">Household</button>
     </nav>
@@ -139,6 +141,30 @@
           <div class="form-actions"><button class="btn" type="submit">Start fasting session</button></div>
         </form>
         <div id="fastingStatus" class="status" aria-live="polite"></div><div id="fastingTable"></div>
+      </section>
+
+      <section class="panel full" id="catalogPanel">
+        <h2>Recipe book</h2>
+        <p class="section-note">Original V1 recipes with ingredients, macros, prep/cook times, cooking steps and tips. Favorites are private to your account.</p>
+        <div class="form-grid">
+          <div class="field"><label for="recipeDiet">Diet style</label><select id="recipeDiet"><option value="balanced">Balanced</option><option value="vegetarian">Vegetarian</option><option value="high_protein">High protein</option><option value="low_carb">Low carb</option></select></div>
+          <div class="field"><label for="recipeSlot">Meal slot</label><select id="recipeSlot"><option value="">All meals</option><option value="Breakfast">Breakfast</option><option value="Lunch">Lunch</option><option value="Snack">Snack</option><option value="Dinner">Dinner</option></select></div>
+          <div class="field wide"><label for="recipeSearch">Search recipes</label><input id="recipeSearch" type="search" maxlength="120" placeholder="Search by recipe name"></div>
+        </div>
+        <div id="recipeStatus" class="status" aria-live="polite"></div>
+        <div id="recipeResults" class="catalog-grid"></div>
+      </section>
+
+      <section class="panel full" id="routinePanel">
+        <h2>Workout library</h2>
+        <p class="section-note">Browse the original home and gym routines, including exercise instructions, target muscles, modifications and form mistakes.</p>
+        <div class="form-grid">
+          <div class="field"><label for="routineMode">Training location</label><select id="routineMode"><option value="home">Home</option><option value="gym">Gym</option></select></div>
+          <div class="field"><label for="routineLevel">Fitness level</label><select id="routineLevel"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option></select></div>
+        </div>
+        <div id="routineStatus" class="status" aria-live="polite"></div>
+        <div id="routineResults" class="catalog-grid"></div>
+        <p class="section-note">Advanced-specific V1 routines were not present in the source catalogue; use the intermediate library until an advanced set is added and reviewed.</p>
       </section>
 
       <section class="panel">
