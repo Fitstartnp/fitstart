@@ -351,6 +351,220 @@ class MyProfileView(APIView):
                 "diet_type": profile.diet_type,
                 "workout_mode": profile.workout_mode,
                 "fitness_level": profile.fitness_level,
+                "meal_variation_index": profile.meal_variation_index,
+                "slot_offsets": profile.slot_offsets,
+                "workout_variation_index": profile.workout_variation_index,
+                "exercise_offsets": profile.exercise_offsets,
+                "completed_exercises": profile.completed_exercises,
+                "streak_count": profile.streak_count,
+                "last_active_date": profile.last_active_date,
+                "fasting_protocol_hours": profile.fasting_protocol_hours,
+                "fasting_is_active": profile.fasting_is_active,
+                "fasting_elapsed_minutes": profile.fasting_elapsed_minutes,
+                "selected_day_index": profile.selected_day_index,
+                "legacy_favorite_recipe_names": profile.legacy_favorite_recipe_names,
+                "legacy_workout_state": profile.legacy_workout_state,
+                "sharing": {
+                    "meal_plans": profile.share_meal_plans,
+                    "grocery_lists": profile.share_grocery_lists,
+                    "workout_plans": profile.share_workout_plans,
+                    "workout_history": profile.share_workout_history,
+                    "weight_history": profile.share_weight_history,
+                    "body_measurements": profile.share_body_measurements,
+                    "food_diary": profile.share_food_diary,
+                    "water_logs": profile.share_water_logs,
+                    "fasting_sessions": profile.share_fasting_sessions,
+                    "goals": profile.share_goals,
+                },
+            }
+        )
+
+    def patch(self, request):
+        allowed = {
+            "display_name": "display_name",
+            "unit_system": "unit_system",
+            "timezone_name": "timezone_name",
+            "age": "age",
+            "gender": "gender",
+            "height_cm": "height_cm",
+            "start_weight_kg": "start_weight_kg",
+            "current_weight_kg": "current_weight_kg",
+            "goal_weight_kg": "goal_weight_kg",
+            "activity_multiplier": "activity_multiplier",
+            "daily_deficit_kcal": "daily_deficit_kcal",
+            "diet_type": "diet_type",
+            "workout_mode": "workout_mode",
+            "fitness_level": "fitness_level",
+            "share_meal_plans": "share_meal_plans",
+            "share_grocery_lists": "share_grocery_lists",
+            "share_workout_plans": "share_workout_plans",
+            "share_workout_history": "share_workout_history",
+            "share_weight_history": "share_weight_history",
+            "share_body_measurements": "share_body_measurements",
+            "share_food_diary": "share_food_diary",
+            "share_water_logs": "share_water_logs",
+            "share_fasting_sessions": "share_fasting_sessions",
+            "share_goals": "share_goals",
+        }
+        unknown = set(request.data.keys()) - set(allowed)
+        if unknown:
+            raise ValidationError({"detail": f"Unsupported profile fields: {', '.join(sorted(unknown))}"})
+        profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
+        for field in allowed:
+            if field not in request.data:
+                continue
+            value = request.data[field]
+            if field.startswith("share_") and not isinstance(value, bool):
+                raise ValidationError({field: "Sharing settings must be true or false."})
+            if field == "display_name" and (not isinstance(value, str) or len(value) > 80):
+                raise ValidationError({field: "Display name must be 80 characters or fewer."})
+            if field == "unit_system" and value not in ("metric", "imperial"):
+                raise ValidationError({field: "Unit system must be metric or imperial."})
+            if field == "timezone_name":
+                from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+                try:
+                    ZoneInfo(value)
+                except (ZoneInfoNotFoundError, TypeError):
+                    raise ValidationError({field: "Enter a valid IANA time zone."})
+            setattr(profile, field, value)
+        try:
+            profile.full_clean()
+        except DjangoValidationError as exc:
+            raise ValidationError(getattr(exc, "message_dict", exc.messages)) from exc
+        profile.save()
+        return self.get(request)
+
+
+class GroceryItemListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent(self, request, grocery_list_id):
+        return get_object_or_404(
+            GroceryList.visible_to(request.user),
+            pk=grocery_list_id,
+        )
+
+    def get(self, request, grocery_list_id):
+        parent = self.get_parent(request, grocery_list_id)
+        items = parent.items.all()
+        return Response(GroceryItemSerializer(items, many=True).data)
+
+    def post(self, request, grocery_list_id):
+        parent = self.get_parent(request, grocery_list_id)
+        if parent.owner_id != request.user.pk:
+            return Response({"detail": "Only the grocery list owner can add items."}, status=403)
+        serializer = GroceryItemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(grocery_list=parent)
+        return Response(GroceryItemSerializer(item).data, status=201)
+
+
+class GroceryItemDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent_and_item(self, request, grocery_list_id, item_id, owner_only=False):
+        queryset = GroceryList.objects.filter(owner=request.user) if owner_only else GroceryList.visible_to(request.user)
+        parent = get_object_or_404(queryset, pk=grocery_list_id)
+        item = get_object_or_404(GroceryItem.objects.filter(grocery_list=parent), pk=item_id)
+        return parent, item
+
+    def get(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id)
+        return Response(GroceryItemSerializer(item).data)
+
+    def patch(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id, owner_only=True)
+        serializer = GroceryItemSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save()
+        return Response(GroceryItemSerializer(item).data)
+
+    def delete(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id, owner_only=True)
+        item.delete()
+        return Response(status=204)
+
+
+class WorkoutSetListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent(self, request, session_id):
+        return get_object_or_404(WorkoutSession.visible_to(request.user), pk=session_id)
+
+    def get(self, request, session_id):
+        parent = self.get_parent(request, session_id)
+        return Response(WorkoutSetSerializer(parent.sets.all(), many=True).data)
+
+    def post(self, request, session_id):
+        parent = self.get_parent(request, session_id)
+        if parent.owner_id != request.user.pk:
+            return Response({"detail": "Only the workout owner can add sets."}, status=403)
+        serializer = WorkoutSetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save(session=parent)
+        return Response(WorkoutSetSerializer(record).data, status=201)
+
+
+class WorkoutSetDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent_and_set(self, request, session_id, set_id, owner_only=False):
+        queryset = WorkoutSession.objects.filter(owner=request.user) if owner_only else WorkoutSession.visible_to(request.user)
+        parent = get_object_or_404(queryset, pk=session_id)
+        record = get_object_or_404(WorkoutSet.objects.filter(session=parent), pk=set_id)
+        return parent, record
+
+    def get(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id)
+        return Response(WorkoutSetSerializer(record).data)
+
+    def patch(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id, owner_only=True)
+        serializer = WorkoutSetSerializer(record, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save()
+        return Response(WorkoutSetSerializer(record).data)
+
+    def delete(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id, owner_only=True)
+        record.delete()
+        return Response(status=204)
+
+
+class MyProfileView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
+        return Response(
+            {
+                "display_name": profile.display_name,
+                "unit_system": profile.unit_system,
+                "timezone_name": profile.timezone_name,
+                "age": profile.age,
+                "gender": profile.gender,
+                "height_cm": profile.height_cm,
+                "start_weight_kg": profile.start_weight_kg,
+                "current_weight_kg": profile.current_weight_kg,
+                "goal_weight_kg": profile.goal_weight_kg,
+                "activity_multiplier": profile.activity_multiplier,
+                "daily_deficit_kcal": profile.daily_deficit_kcal,
+                "diet_type": profile.diet_type,
+                "workout_mode": profile.workout_mode,
+                "fitness_level": profile.fitness_level,
+                "meal_variation_index": profile.meal_variation_index,
+                "slot_offsets": profile.slot_offsets,
+                "workout_variation_index": profile.workout_variation_index,
+                "exercise_offsets": profile.exercise_offsets,
+                "completed_exercises": profile.completed_exercises,
+                "streak_count": profile.streak_count,
+                "last_active_date": profile.last_active_date,
+                "fasting_protocol_hours": profile.fasting_protocol_hours,
+                "fasting_is_active": profile.fasting_is_active,
+                "fasting_elapsed_minutes": profile.fasting_elapsed_minutes,
+                "selected_day_index": profile.selected_day_index,
+                "legacy_favorite_recipe_names": profile.legacy_favorite_recipe_names,
+                "legacy_workout_state": profile.legacy_workout_state,
                 "sharing": {
                     "meal_plans": profile.share_meal_plans,
                     "grocery_lists": profile.share_grocery_lists,
@@ -593,6 +807,11 @@ class MyDataExportView(APIView):
                 ],
                 "fasting_sessions": serialize(fasting_records, FastingSessionSerializer),
                 "goals": serialize(goal_records, GoalSerializer),
+                "recipe_favorites": RecipeFavoriteSerializer(
+                    RecipeFavorite.objects.filter(user=user).select_related("recipe"),
+                    many=True,
+                    context={"request": request},
+                ).data,
             },
         }
         response = Response(payload)
@@ -988,6 +1207,7 @@ class V1ImportPreviewView(APIView):
             "invalid_entries_skipped": {
                 "weight_logs": plan["invalid_weights"],
                 "food_diary": plan["invalid_foods"],
+                "workout_sets": plan["invalid_workout_sets"],
                 "profile_fields": plan["invalid_profile_fields"],
             },
             "unsupported_fields": plan["unsupported_fields"],
@@ -997,6 +1217,8 @@ class V1ImportPreviewView(APIView):
                 "V1 waterGlasses is a current-day counter, not a dated history. The importer converts it to one estimated total using 250 ml per glass.",
                 "Only the selected person's profile is imported. The other partner's data is not copied to this account.",
                 "Existing V2 logs are preserved; imported entries are appended. Profile settings listed above will be updated.",
+                "V1 workout set logs have no reliable session timestamps. Completed sets are grouped into one imported workout dated at import time; uncompleted set plans remain in legacy planner state.",
+                "V1 recipe favourites are matched by recipe name. Names not found in the loaded catalogue are preserved on your profile for a later catalogue import.",
             ],
         })
 
@@ -1043,6 +1265,26 @@ class V1ImportCommitView(APIView):
                 for entry in plan["foods"]
             ])
             if plan["water_ml"] > 0:
+            if plan["workout_sets"]:
+                workout = WorkoutSession.objects.create(
+                    owner=request.user,
+                    title="Imported V1 workout log",
+                    started_at=import_time,
+                    ended_at=import_time,
+                    notes="Imported from a V1 backup. V1 did not store workout session timestamps.",
+                )
+                WorkoutSet.objects.bulk_create([
+                    WorkoutSet(session=workout, **entry) for entry in plan["workout_sets"]
+                ])
+            if plan["favorite_recipe_ids"]:
+                RecipeFavorite.objects.bulk_create(
+                    [
+                        RecipeFavorite(user=request.user, recipe_id=recipe_id)
+                        for recipe_id in plan["favorite_recipe_ids"]
+                    ],
+                    ignore_conflicts=True,
+                )
+
                 WaterEntry.objects.create(owner=request.user, amount_ml=plan["water_ml"], logged_at=import_time)
 
             batch = DataImportBatch.objects.create(
@@ -1069,6 +1311,7 @@ class V1ImportCommitView(APIView):
                 "food_diary": plan["invalid_foods"],
                 "profile_fields": plan["invalid_profile_fields"],
             },
+            "unmatched_favorite_names": plan["pending_favorite_names"],
         }, status=201)
 
 
