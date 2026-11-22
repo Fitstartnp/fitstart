@@ -33,6 +33,17 @@
     return result;
   }
 
+  function setDateDefaults() {
+    const now = new Date();
+    const today = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, "0"),
+      String(now.getDate()).padStart(2, "0")
+    ].join("-");
+    if ($("planDate") && !$("planDate").value) $("planDate").value = today;
+    if ($("groceryWeek") && !$("groceryWeek").value) $("groceryWeek").value = today;
+  }
+
   function showStatus(id, message, kind = "") {
     const node = $(id);
     if (!node) return;
@@ -198,6 +209,7 @@
   }
 
   async function loadData() {
+    setDateDefaults();
     const [account, profile, households, weights, measures, foods, waters, meals, groceries, workouts, fastings, goals] = await Promise.all([
       api("/me/"), api("/profile/"), api("/households/"),
       api("/weight-entries/"), api("/body-measurements/"),
@@ -307,6 +319,7 @@
     if (!body.household) delete body.household;
     await api("/meal-plan-entries/", { method: "POST", body });
     $("mealForm").reset();
+    setDateDefaults();
     await refreshRecords();
     showStatus("mealStatus", "Meal plan entry saved.", "success");
   });
@@ -320,6 +333,7 @@
     if (!body.household) delete body.household;
     await api("/grocery-lists/", { method: "POST", body });
     $("groceryForm").reset();
+    setDateDefaults();
     await refreshRecords();
     showStatus("groceryStatus", "Grocery list created.", "success");
   });
