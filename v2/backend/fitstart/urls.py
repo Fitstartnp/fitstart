@@ -1,7 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
-from django.views.generic import RedirectView
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import TemplateView
+
+class HomeView(LoginRequiredMixin, TemplateView):
+    template_name = "dashboard.html"
+
 
 urlpatterns = [
     path("admin/", admin.site.urls),
@@ -32,5 +37,5 @@ urlpatterns = [
         name="password_reset_complete",
     ),
     path("api/v1/", include("apps.api.urls")),
-    path("", RedirectView.as_view(pattern_name="login", permanent=False)),
+    path("", HomeView.as_view(), name="home"),
 ]
