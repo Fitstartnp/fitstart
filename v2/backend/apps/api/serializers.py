@@ -160,7 +160,11 @@ class RecipeSerializer(serializers.ModelSerializer):
     class Meta:
         model = Recipe
         fields = "__all__"
-        read_only_fields = fields
+        read_only_fields = (
+            "id", "diet_style", "menu_number", "slot_position", "slot", "icon",
+            "ratio", "base_calories_kcal", "name", "prep_time", "cook_time",
+            "portions", "base_macros", "steps", "tip", "source", "updated_at",
+        )
 
     def get_is_favorite(self, obj):
         request = self.context.get("request")
@@ -173,7 +177,11 @@ class ExerciseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Exercise
         fields = "__all__"
-        read_only_fields = fields
+        read_only_fields = (
+            "id", "source_key", "name", "detail", "estimated_calories_kcal",
+            "focus", "muscles", "steps", "modification", "common_mistake",
+            "source", "updated_at",
+        )
 
 
 class RoutineExerciseSerializer(serializers.ModelSerializer):
