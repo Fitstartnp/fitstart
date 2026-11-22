@@ -17,12 +17,13 @@ V2 must support:
 
 Use a **modular monolith**, not microservices:
 
-- **Backend:** Django (Python) with Django REST Framework for a versioned JSON API.
-- **Database:** PostgreSQL.
-- **Frontend:** Vite + TypeScript ES modules. Initially preserve the current visual design and vanilla-DOM approach while splitting the giant HTML/JavaScript file into maintainable page, component, state, and service modules. A wholesale React rewrite is not required for the first migration.
+- **Backend:** Django 5.2 LTS (latest patch at implementation time) with Django REST Framework for a versioned JSON API. The server already has Python 3.12; Django 5.2 supports it and its published extended-support period reaches April 2028.
+- **Database:** PostgreSQL 18, installed as a Windows service on the current candidate host.
+- **Frontend:** Django templates and vanilla JavaScript ES modules initially. Preserve the current visual design while splitting the giant HTML/JavaScript file into page, component, state, and service modules. Introduce a Vite build only where it adds value; a wholesale React rewrite is not required.
 - **Authentication:** Django's server-side account/session system, email verification and password reset. Use secure, same-origin, server-managed sessions and CSRF protection.
-- **Production edge:** Caddy or Nginx as reverse proxy with HTTPS.
-- **Deployment:** Docker Compose on a Linux host, with application and database on a private container network. The database must not be exposed directly to the public internet.
+- **Application server:** Waitress (production-quality WSGI server with Windows support) bound only to 127.0.0.1.
+- **Production edge:** Caddy as a Windows service, providing reverse proxying and automatic HTTPS.
+- **Deployment:** Native Windows services initially. Keep PostgreSQL private and do not expose its port to the public internet. A Linux host or VM remains a future alternative if server OS strategy changes.
 
 This stack is a starting recommendation, not a deployment assumption. Confirm the target server's operating system, architecture, RAM, storage, network access, and Docker availability before pinning package versions or writing production deployment files.
 
@@ -96,27 +97,31 @@ Each record must have an owner and, where collaboration is permitted, an explici
 
 ## Deployment shape
 
-Initial production topology:
+Initial production topology on the connected Windows Server candidate:
 
     Browser
       |
       | HTTPS (your domain)
       v
-    Caddy / Nginx
+    Caddy Windows service :80/:443
       |
-      | private container network
+      | reverse proxy to 127.0.0.1:8000
       v
-    Django + API + static frontend
+    Waitress -> Django + API + static frontend
       |
-      | private database connection
+      | localhost/private TCP
       v
-    PostgreSQL
+    PostgreSQL Windows service
 
     Scheduled encrypted database backup -> separate backup destination
 
-Only ports 80/443 should be public unless the host has an explicitly justified additional service. PostgreSQL must remain private. Use a persistent database volume and encrypted off-server backups; perform and document restore tests. Configure health checks, error reporting, security updates, and a staging environment before serving public accounts.
+Only ports 80/443 should be public. Waitress and PostgreSQL must bind to localhost/private interfaces; PostgreSQL must not be reachable from the public internet. Use a dedicated non-admin service identity, restricted file ACLs, encrypted off-server backups, and tested restores. Configure health checks, error reporting, security updates, and a staging environment before serving public accounts.
 
-DNS, firewall, reverse-proxy, certificate, and backup instructions will be written to match the actual server after its inventory is confirmed.
+**Host inventory on 22 November 2026:** the connected device reports Windows Server 2022 Standard Evaluation, a netcup KVM virtual server, 16 GB RAM, eight logical processors, Python 3.12, and about 390 GB free on C:. Docker Desktop, IIS, and WSL are not installed; ports 80 and 443 had no listeners at the time of inspection. The evaluation edition is time-limited and must be converted to a valid licensed edition before a public production launch. No software has been installed and no firewall or DNS settings have been changed.
+
+Docker Desktop is not supported on Windows Server 2022. Native Windows services are the practical first deployment path for this host. PostgreSQL's EDB Windows installer lists Server 2022 support; Waitress supports CPython on Windows; Caddy supports running as a Windows service and can manage HTTPS certificates.
+
+DNS, firewall, Caddy, PostgreSQL, and backup instructions will be applied only after confirming the exact domain and production host.
 
 ## GDPR and privacy readiness
 
@@ -150,4 +155,4 @@ This app stores body measurements, weight history, food choices, activity, and r
 - Email sender/SMTP availability for verification and recovery.
 - Whether registration starts invite-only or open to everyone.
 
-The first blocking deployment input is the server OS and whether it can run Docker.
+The remaining deployment inputs are confirmation that this connected server is the intended public host, the domain/subdomain to use, Windows Server licensing status, and an email sender for verification/recovery.
