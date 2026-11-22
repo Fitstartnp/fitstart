@@ -96,16 +96,24 @@
       host.appendChild(row);
     });
 
-    const select = $("inviteHousehold");
-    const previous = select.value;
-    select.replaceChildren();
-    state.households.forEach((item) => {
-      const option = document.createElement("option");
-      option.value = String(item.id);
-      option.textContent = item.name + " (" + item.role + ")";
-      select.appendChild(option);
+    ["inviteHousehold", "weightHousehold", "foodHousehold", "workoutHousehold", "goalHousehold"].forEach((id) => {
+      const select = $(id);
+      const previous = select.value;
+      select.replaceChildren();
+      if (id !== "inviteHousehold") {
+        const privateOption = document.createElement("option");
+        privateOption.value = "";
+        privateOption.textContent = "Private to me";
+        select.appendChild(privateOption);
+      }
+      state.households.forEach((item) => {
+        const option = document.createElement("option");
+        option.value = String(item.id);
+        option.textContent = item.name + " (" + item.role + ")";
+        select.appendChild(option);
+      });
+      if (state.households.some((item) => String(item.id) === previous)) select.value = previous;
     });
-    if (state.households.some((item) => String(item.id) === previous)) select.value = previous;
     $("inviteButton").disabled = state.households.length === 0;
   }
 
