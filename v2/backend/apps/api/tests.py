@@ -197,6 +197,27 @@ class PersonalRecordApiTests(APITestCase):
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(len(listing.data), 1)
 
+    def test_owner_can_delete_own_weight_entry_and_profile_weight_resets(self):
+        self.client.force_authenticate(user=self.alice)
+        starting_weight = self.alice.personal_profile.start_weight_kg
+        created = self.client.post(
+            "/api/v1/weight-entries/",
+            {"weight_kg": "81.50", "note": "Mistaken entry"},
+            format="json",
+        )
+        self.assertEqual(created.status_code, 201, created.data)
+
+        deleted = self.client.delete(f"/api/v1/weight-entries/{created.data['id']}/")
+        self.assertEqual(deleted.status_code, 204)
+        self.assertFalse(
+            self.alice.weightentry_records.filter(pk=created.data["id"]).exists()
+        )
+        self.alice.refresh_from_db()
+        self.assertEqual(
+            self.alice.personal_profile.current_weight_kg,
+            starting_weight,
+        )
+
     def test_private_weight_entry_is_not_visible_to_another_user(self):
         self.client.force_authenticate(user=self.alice)
         created = self.client.post(
@@ -239,6 +260,10 @@ class PersonalRecordApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(update.status_code, 404)
+        delete = self.client.delete(f"/api/v1/weight-entries/{entry_id}/")
+        self.assertEqual(delete.status_code, 404)
+        still_visible = self.client.get(f"/api/v1/weight-entries/{entry_id}/")
+        self.assertEqual(still_visible.status_code, 200)
 
     def test_sharing_preference_is_required_before_assigning_household(self):
         self.client.force_authenticate(user=self.alice)
