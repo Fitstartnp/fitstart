@@ -216,6 +216,8 @@ class WorkoutSet(models.Model):
     distance_m = models.DecimalField(max_digits=9, decimal_places=2, null=True, blank=True)
     rest_seconds = models.PositiveIntegerField(null=True, blank=True)
     rpe = models.DecimalField(max_digits=3, decimal_places=1, null=True, blank=True)
+    set_type = models.CharField(max_length=20, default="working")
+    is_completed = models.BooleanField(default=False)
     notes = models.CharField(max_length=500, blank=True)
 
     class Meta:
