@@ -312,6 +312,17 @@ class MyProfileView(APIView):
                 "display_name": profile.display_name,
                 "unit_system": profile.unit_system,
                 "timezone_name": profile.timezone_name,
+                "age": profile.age,
+                "gender": profile.gender,
+                "height_cm": profile.height_cm,
+                "start_weight_kg": profile.start_weight_kg,
+                "current_weight_kg": profile.current_weight_kg,
+                "goal_weight_kg": profile.goal_weight_kg,
+                "activity_multiplier": profile.activity_multiplier,
+                "daily_deficit_kcal": profile.daily_deficit_kcal,
+                "diet_type": profile.diet_type,
+                "workout_mode": profile.workout_mode,
+                "fitness_level": profile.fitness_level,
                 "sharing": {
                     "meal_plans": profile.share_meal_plans,
                     "grocery_lists": profile.share_grocery_lists,
@@ -332,6 +343,17 @@ class MyProfileView(APIView):
             "display_name": "display_name",
             "unit_system": "unit_system",
             "timezone_name": "timezone_name",
+            "age": "age",
+            "gender": "gender",
+            "height_cm": "height_cm",
+            "start_weight_kg": "start_weight_kg",
+            "current_weight_kg": "current_weight_kg",
+            "goal_weight_kg": "goal_weight_kg",
+            "activity_multiplier": "activity_multiplier",
+            "daily_deficit_kcal": "daily_deficit_kcal",
+            "diet_type": "diet_type",
+            "workout_mode": "workout_mode",
+            "fitness_level": "fitness_level",
             "share_meal_plans": "share_meal_plans",
             "share_grocery_lists": "share_grocery_lists",
             "share_workout_plans": "share_workout_plans",
@@ -364,7 +386,10 @@ class MyProfileView(APIView):
                 except (ZoneInfoNotFoundError, TypeError):
                     raise ValidationError({field: "Enter a valid IANA time zone."})
             setattr(profile, field, value)
-        profile.full_clean()
+        try:
+            profile.full_clean()
+        except DjangoValidationError as exc:
+            raise ValidationError(getattr(exc, "message_dict", exc.messages)) from exc
         profile.save()
         return self.get(request)
 
