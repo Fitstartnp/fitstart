@@ -26,3 +26,5 @@ main{width:min(1180px,calc(100% - 32px));margin:30px auto 80px}.welcome{display:
 .progress-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:13px 22px;margin:14px 0}
 .progress-row{min-width:0}.progress-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:.8rem}.progress-heading span{color:var(--muted);font-variant-numeric:tabular-nums}
 .progress-track{height:9px;border-radius:99px;background:#e7dfd4;overflow:hidden}.progress-fill{height:100%;border-radius:99px;background:var(--teal);transition:width .25s ease}
+
+.table-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px;min-width:130px;white-space:normal;font-size:.78rem;color:var(--muted)}.table-actions .btn{flex:0 0 auto}
