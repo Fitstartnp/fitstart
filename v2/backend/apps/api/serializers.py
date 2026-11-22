@@ -129,3 +129,25 @@ class GoalSerializer(PersonalRecordSerializer):
     class Meta(PersonalRecordSerializer.Meta):
         model = Goal
         fields = "__all__"
+
+
+
+class GroceryItemSerializer(serializers.ModelSerializer):
+    grocery_list = serializers.IntegerField(read_only=True)
+    created_at = serializers.DateTimeField(read_only=True)
+
+    class Meta:
+        from apps.tracking.models import GroceryItem
+        model = GroceryItem
+        fields = "__all__"
+        read_only_fields = ("id", "grocery_list", "created_at")
+
+
+class WorkoutSetSerializer(serializers.ModelSerializer):
+    session = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        from apps.tracking.models import WorkoutSet
+        model = WorkoutSet
+        fields = "__all__"
+        read_only_fields = ("id", "session")
