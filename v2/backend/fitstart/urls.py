@@ -1,8 +1,15 @@
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import ensure_csrf_cookie
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.views.generic import TemplateView
+
+@method_decorator(ensure_csrf_cookie, name="dispatch")
+class InvitationPageView(TemplateView):
+    template_name = "invite/accept.html"
+
 
 class HomeView(LoginRequiredMixin, TemplateView):
     template_name = "dashboard.html"
@@ -10,6 +17,7 @@ class HomeView(LoginRequiredMixin, TemplateView):
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("invite/", InvitationPageView.as_view(), name="invite-accept-page"),
     path(
         "accounts/login/",
         auth_views.LoginView.as_view(template_name="registration/login.html"),
