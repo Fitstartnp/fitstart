@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.api",
     "apps.tracking",
+    "apps.catalog",
 ]
 
 MIDDLEWARE = [
