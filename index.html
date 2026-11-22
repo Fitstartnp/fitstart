@@ -846,14 +846,14 @@
       </div>
       <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-700/40">
         <div class="flex flex-wrap items-center gap-1.5">
-          <input id="quickHeaderTokenInput" type="password" placeholder="Paste token with 'repo' scope" class="w-48 rounded-lg border border-slate-300 px-2.5 py-1 text-xs bg-white" />
+          <input id="quickHeaderTokenInput" type="password" placeholder="Fine-grained token (Contents read/write)" title="Grant Contents read/write only for Fitstartnp/fitstart. The token is not saved." class="w-48 rounded-lg border border-slate-300 px-2.5 py-1 text-xs bg-white" />
           <button type="button" id="quickBannerPublishBtn" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition">
             🚀 Push to GitHub Now
           </button>
         </div>
-        <a href="https://github.com/settings/tokens/new?scopes=repo,gist&description=FitStart+Live+Publisher" target="_blank" rel="noopener noreferrer"
+        <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer"
           class="text-[11px] font-bold underline hover:opacity-80" style="color: #9bc4e2;">
-          🔑 Need a token with "repo" permission? Click here (pre-checks repo + gist) →
+          🔑 Need a fine-grained token? Grant Contents read/write for Fitstartnp/fitstart →
         </a>
       </div>
     </div>
@@ -6061,7 +6061,7 @@
     async function pushAppToGitHubRepo(token) {
       if (!token) return { ok: false, sha: '', reason: 'No token provided' };
       try {
-        const repoUrl = 'https://api.github.com/repos/OWNER/REPOSITORY/contents/index.html';
+        const repoUrl = 'https://api.github.com/repos/Fitstartnp/fitstart/contents/index.html';
         const authHeader = token.startsWith('ghp_') ? `token ${token}` : `Bearer ${token}`;
         let currentSha = '';
 
@@ -6122,13 +6122,13 @@
         } catch (e) {}
 
         if (putRes.status === 401) {
-          return { ok: false, sha: '', reason: 'Token ghp_GpEc... was revoked or expired (401). Click "⬇️ 1. Download index.html" & "📤 2. Open GitHub Upload Page" on the right!' };
+          return { ok: false, sha: '', reason: 'GitHub rejected the supplied token (HTTP 401). Check its expiry and repository access.' };
         }
         if (putRes.status === 403 || putRes.status === 404) {
           return {
             ok: false,
             sha: '',
-            reason: `Your token only has [${scopes || 'gist'}] permission and lacks "repo" permission (${putRes.status} ${errMsg}). Click "⬇️ 1. Download index.html" + "📤 2. Open GitHub Upload Page", or click the "🔑 Need a token with repo permission?" link!`
+            reason: `GitHub rejected the write request (${putRes.status} ${errMsg}). Confirm this token has Contents read/write access to Fitstartnp/fitstart and try again.`
           };
         }
         return {
@@ -6151,7 +6151,7 @@
       const hdrBtn = document.getElementById('headerPublishGitBtn');
       const liveTxt = document.getElementById('liveGitStatusText');
       if (!token) {
-        if (liveTxt) liveTxt.textContent = 'Paste your GitHub token (with repo scope) on the right and click 🚀 Push to GitHub Now!';
+        if (liveTxt) liveTxt.textContent = 'Enter a fine-grained token with Contents read/write access to Fitstartnp/fitstart, then click Push to GitHub.';
         return;
       }
       if (hdrBtn) hdrBtn.textContent = '⏳ Publishing...';
