@@ -1,39 +1,144 @@
+{% load static %}
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="same-origin">
   <title>FitStart · Your space</title>
-  <style>
-    :root{--ink:#24201d;--paper:#f3ece1;--card:#fbf8f3;--line:#d8cbb8;--teal:#2d6a6e}
-    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);font:16px system-ui,sans-serif}
-    header{padding:20px max(24px,calc((100vw - 1000px)/2));display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);background:var(--card)}
-    main{width:min(100% - 32px,1000px);margin:40px auto}.panel{padding:26px;border:1px solid var(--line);border-radius:18px;background:var(--card)}
-    button{padding:10px 16px;background:var(--teal);color:white;border:0;border-radius:8px;font-weight:700;cursor:pointer}
-    small{color:#625950}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:22px}
-    .tile{padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}
-  </style>
+  <link rel="stylesheet" href="{% static 'fitstart/app.css' %}">
 </head>
 <body>
-<header>
-  <strong>FitStart</strong>
-  <div>
-    <span>{{ request.user.email }}</span>
-    <form method="post" action="{% url 'logout' %}" style="display:inline;margin-left:14px">
-      {% csrf_token %}<button type="submit">Sign out</button>
-    </form>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">F</span><span>FitStart</span></div>
+  <div class="accountbar">
+    <span class="account-email" id="accountEmail">{{ request.user.email }}</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn secondary small" type="submit">Sign out</button></form>
   </div>
 </header>
 <main>
-  <section class="panel">
-    <h1>Your FitStart space</h1>
-    <p>Your account is active. Private nutrition and progress records will belong to your account. Household sharing will be opt-in by category.</p>
-    <div class="grid">
-      <div class="tile"><strong>Personal profile</strong><p><small>Units, goals and preferences.</small></p></div>
-      <div class="tile"><strong>Nutrition</strong><p><small>Meal planning and food logs.</small></p></div>
-      <div class="tile"><strong>Training</strong><p><small>Workouts and exercise history.</small></p></div>
-      <div class="tile"><strong>Households</strong><p><small>Invite collaborators when sharing is available.</small></p></div>
+  <div id="appLoading" class="panel full">Loading your FitStart space…</div>
+  <div id="appContent" hidden>
+    <div class="welcome">
+      <div><h1>Your FitStart space</h1><p>Your records are private unless you choose to share a category with a household.</p></div>
+      <span class="pill">Private beta</span>
     </div>
-  </section>
+    <section class="summary" aria-label="Your activity summary">
+      <div class="metric"><span>Weight entries</span><strong id="weightCount">0</strong></div>
+      <div class="metric"><span>Food entries</span><strong id="foodCount">0</strong></div>
+      <div class="metric"><span>Workouts</span><strong id="workoutCount">0</strong></div>
+      <div class="metric"><span>Goals</span><strong id="goalCount">0</strong></div>
+    </section>
+    <nav class="tabs" aria-label="Dashboard sections">
+      <button class="tablink" aria-pressed="true" data-scroll="recordsPanel">Activity</button>
+      <button class="tablink" aria-pressed="false" data-scroll="profilePanel">Profile & privacy</button>
+      <button class="tablink" aria-pressed="false" data-scroll="householdPanel">Household</button>
+    </nav>
+    <div class="layout">
+      <section class="panel full" id="recordsPanel">
+        <h2>Weight history</h2>
+        <form id="weightForm" data-status="weightStatus">
+          <div class="form-grid">
+            <div class="field"><label for="weightValue">Weight (kg)</label><input id="weightValue" name="weight_kg" type="number" min="0.1" max="999" step="0.01" required></div>
+            <div class="field"><label for="weightNote">Note (optional)</label><input id="weightNote" name="note" maxlength="500"></div>
+            <div class="field"><label for="weightHousehold">Share with household (optional)</label><select id="weightHousehold" name="household"><option value="">Private to me</option></select></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Save weight</button></div>
+        </form>
+        <div id="weightStatus" class="status" aria-live="polite"></div><div id="weightTable"></div>
+      </section>
+      <section class="panel full">
+        <h2>Food diary</h2>
+        <form id="foodForm" data-status="foodStatus">
+          <div class="form-grid">
+            <div class="field"><label for="foodName">Food or meal</label><input id="foodName" name="food_name" maxlength="180" required></div>
+            <div class="field"><label for="foodSlot">Meal</label><select id="foodSlot" name="meal_slot"><option value="breakfast">Breakfast</option><option value="lunch">Lunch</option><option value="snack">Snack</option><option value="dinner">Dinner</option><option value="other">Other</option></select></div>
+            <div class="field"><label for="foodCalories">Calories (kcal, optional)</label><input id="foodCalories" name="calories_kcal" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="foodProtein">Protein (g)</label><input id="foodProtein" name="protein_g" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="foodCarbs">Carbs (g)</label><input id="foodCarbs" name="carbs_g" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="foodFat">Fat (g)</label><input id="foodFat" name="fat_g" type="number" min="0" step="0.1"></div>
+            <div class="field"><label for="foodHousehold">Share with household (optional)</label><select id="foodHousehold" name="household"><option value="">Private to me</option></select></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Add food entry</button></div>
+        </form>
+        <div id="foodStatus" class="status" aria-live="polite"></div><div id="foodTable"></div>
+      </section>
+      <section class="panel">
+        <h2>Workout sessions</h2>
+        <form id="workoutForm" data-status="workoutStatus">
+          <div class="form-grid">
+            <div class="field wide"><label for="workoutTitle">Workout</label><input id="workoutTitle" name="title" maxlength="180" required></div>
+            <div class="field wide"><label for="workoutNotes">Notes</label><textarea id="workoutNotes" name="notes" maxlength="1000"></textarea></div>
+            <div class="field wide"><label for="workoutHousehold">Share with household (optional)</label><select id="workoutHousehold" name="household"><option value="">Private to me</option></select></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Save workout</button></div>
+        </form>
+        <div id="workoutStatus" class="status" aria-live="polite"></div><div id="workoutTable"></div>
+      </section>
+      <section class="panel">
+        <h2>Goals</h2>
+        <form id="goalForm" data-status="goalStatus">
+          <div class="form-grid">
+            <div class="field wide"><label for="goalTitle">Goal</label><input id="goalTitle" name="title" maxlength="180" required></div>
+            <div class="field"><label for="goalMetric">Metric key</label><input id="goalMetric" name="metric_key" maxlength="60" placeholder="e.g. weight_kg" required></div>
+            <div class="field"><label for="goalTarget">Target value</label><input id="goalTarget" name="target_value" type="number" step="0.01" required></div>
+            <div class="field"><label for="goalUnit">Unit</label><input id="goalUnit" name="unit" maxlength="40" placeholder="kg, reps, km…"></div>
+            <div class="field"><label for="goalDate">Target date</label><input id="goalDate" name="target_date" type="date"></div>
+            <div class="field wide"><label for="goalHousehold">Share with household (optional)</label><select id="goalHousehold" name="household"><option value="">Private to me</option></select></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Create goal</button></div>
+        </form>
+        <div id="goalStatus" class="status" aria-live="polite"></div><div id="goalTable"></div>
+      </section>
+      <section class="panel full" id="profilePanel">
+        <h2>Profile & privacy</h2>
+        <p class="section-note">These controls decide which record categories may be shared when you explicitly select a household while creating a record.</p>
+        <form id="profileForm" data-status="profileStatus">
+          <div class="form-grid">
+            <div class="field"><label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80"></div>
+            <div class="field"><label for="unitSystem">Units</label><select id="unitSystem" name="unit_system"><option value="metric">Metric</option><option value="imperial">Imperial</option></select></div>
+            <div class="field wide"><label for="timezoneName">Time zone (IANA)</label><input id="timezoneName" name="timezone_name" maxlength="64" placeholder="Europe/Berlin" required></div>
+            <div class="field wide"><label>Allow household sharing for these categories</label>
+              <div class="checkgrid">
+                <label class="checkline"><input id="shareWeightHistory" type="checkbox" name="share_weight_history"> Weight history</label>
+                <label class="checkline"><input id="shareBodyMeasurements" type="checkbox" name="share_body_measurements"> Body measurements</label>
+                <label class="checkline"><input id="shareFoodDiary" type="checkbox" name="share_food_diary"> Food diary</label>
+                <label class="checkline"><input id="shareWaterLogs" type="checkbox" name="share_water_logs"> Water logs</label>
+                <label class="checkline"><input id="shareMealPlans" type="checkbox" name="share_meal_plans"> Meal plans</label>
+                <label class="checkline"><input id="shareGroceryLists" type="checkbox" name="share_grocery_lists"> Grocery lists</label>
+                <label class="checkline"><input id="shareWorkoutHistory" type="checkbox" name="share_workout_history"> Workout history</label>
+                <label class="checkline"><input id="shareWorkoutPlans" type="checkbox" name="share_workout_plans"> Workout plans</label>
+                <label class="checkline"><input id="shareFastingSessions" type="checkbox" name="share_fasting_sessions"> Fasting sessions</label>
+                <label class="checkline"><input id="shareGoals" type="checkbox" name="share_goals"> Goals</label>
+              </div>
+            </div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Save profile</button></div>
+        </form>
+        <div id="profileStatus" class="status" aria-live="polite"></div>
+      </section>
+      <section class="panel full" id="householdPanel">
+        <h2>Households</h2>
+        <p class="section-note">Create a private household space and invite people by email. Household membership does not reveal personal records unless their owner enables sharing.</p>
+        <div id="householdList" class="household-list"></div>
+        <div class="form-grid">
+          <form id="householdForm" data-status="householdStatus">
+            <div class="field"><label for="householdName">New household name</label><input id="householdName" name="name" maxlength="100" required></div>
+            <div class="form-actions"><button class="btn" type="submit">Create household</button></div>
+          </form>
+          <form id="inviteForm" data-status="inviteStatus">
+            <div class="field"><label for="inviteEmail">Invite email</label><input id="inviteEmail" name="email" type="email" required></div>
+            <div class="field"><label for="inviteHousehold">Household</label><select id="inviteHousehold" name="household" required></select></div>
+            <div class="field"><label for="inviteRole">Role</label><select id="inviteRole" name="role"><option value="member">Member</option><option value="admin">Administrator</option></select></div>
+            <div class="form-actions"><button id="inviteButton" class="btn" type="submit">Send invitation</button></div>
+          </form>
+        </div>
+        <div id="householdStatus" class="status" aria-live="polite"></div>
+        <div id="inviteStatus" class="status" aria-live="polite"></div>
+      </section>
+    </div>
+  </div>
 </main>
+<script src="{% static 'fitstart/app.js' %}" defer></script>
 </body>
 </html>
