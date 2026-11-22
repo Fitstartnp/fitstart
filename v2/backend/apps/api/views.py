@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.households.models import HouseholdMembership
+from apps.profiles.models import PersonalProfile
 
 
 class HealthView(APIView):
@@ -22,7 +23,7 @@ class MeView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        profile = getattr(request.user, "personal_profile", None)
+        profile = PersonalProfile.objects.filter(user=request.user).first()
         return Response(
             {
                 "id": request.user.pk,
