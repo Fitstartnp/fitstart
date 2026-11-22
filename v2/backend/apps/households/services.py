@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django.core.exceptions import PermissionDenied
 from django.utils import timezone
+from django.db import transaction
 
 from .models import Household, HouseholdInvitation, HouseholdMembership
 
@@ -44,3 +45,35 @@ def create_invitation(*, actor, household, email: str, role: str = HouseholdInvi
         created_by=actor,
         expires_at=timezone.now() + timedelta(days=7),
     )
+
+
+
+@transaction.atomic
+def accept_invitation(*, user, raw_token: str):
+    """Accept a single-use invitation only for the verified invited email."""
+    digest = HouseholdInvitation.digest_token(raw_token)
+    try:
+        invitation = HouseholdInvitation.objects.select_for_update().get(token_digest=digest)
+    except HouseholdInvitation.DoesNotExist as exc:
+        raise PermissionDenied("This invitation is invalid or has expired.") from exc
+
+    if not invitation.is_usable or not invitation.matches_token(raw_token):
+        raise PermissionDenied("This invitation is invalid or has expired.")
+    if not user.is_authenticated or not user.is_active:
+        raise PermissionDenied("Sign in with the invited account before accepting.")
+    if not user.email_verified_at:
+        raise PermissionDenied("Verify your email address before accepting this invitation.")
+    if user.email.strip().lower() != invitation.invited_email.strip().lower():
+        raise PermissionDenied("This invitation was issued to a different email address.")
+
+    membership, _ = HouseholdMembership.objects.update_or_create(
+        household=invitation.household,
+        user=user,
+        defaults={
+            "role": invitation.role,
+            "status": HouseholdMembership.Status.ACTIVE,
+        },
+    )
+    invitation.accepted_at = timezone.now()
+    invitation.save(update_fields=("accepted_at",))
+    return membership
