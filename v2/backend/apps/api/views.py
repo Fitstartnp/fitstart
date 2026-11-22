@@ -271,6 +271,24 @@ class WeightEntryViewSet(PersonalRecordViewSet):
     record_model = WeightEntry
     serializer_class = WeightEntrySerializer
 
+    def _sync_current_weight(self):
+        latest = WeightEntry.objects.filter(owner=self.request.user).order_by("-measured_on", "-id").first()
+        profile, _ = PersonalProfile.objects.get_or_create(user=self.request.user)
+        profile.current_weight_kg = latest.weight_kg if latest else profile.start_weight_kg
+        profile.save(update_fields=("current_weight_kg", "updated_at"))
+
+    def perform_create(self, serializer):
+        super().perform_create(serializer)
+        self._sync_current_weight()
+
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        self._sync_current_weight()
+
+    def perform_destroy(self, instance):
+        super().perform_destroy(instance)
+        self._sync_current_weight()
+
 
 class BodyMeasurementViewSet(PersonalRecordViewSet):
     record_model = BodyMeasurement
