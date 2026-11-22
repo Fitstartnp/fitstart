@@ -680,3 +680,74 @@ class MyDataExportApiTests(APITestCase):
         self.assertNotIn("password", serialized.lower())
         self.assertNotIn("cloudConfig", serialized)
         self.assertNotIn("gist_token", serialized.lower())
+
+
+class MyDataExportApiTests(APITestCase):
+    def setUp(self):
+        from apps.households.models import HouseholdMembership
+        from apps.households.services import create_household
+        from apps.profiles.models import PersonalProfile
+        from apps.tracking.models import (
+            FoodEntry, GroceryItem, GroceryList, WeightEntry, WorkoutSession, WorkoutSet,
+        )
+
+        self.alice = User.objects.create_user("export-alice@example.com", "long-alice-password")
+        self.bob = User.objects.create_user("export-bob@example.com", "long-bob-password")
+        self.household = create_household(owner=self.alice, name="Export household")
+        HouseholdMembership.objects.create(
+            household=self.household,
+            user=self.bob,
+            role=HouseholdMembership.Role.MEMBER,
+            status=HouseholdMembership.Status.ACTIVE,
+        )
+        alice_profile = PersonalProfile.objects.get(user=self.alice)
+        alice_profile.share_weight_history = True
+        alice_profile.save(update_fields=("share_weight_history", "updated_at"))
+
+        WeightEntry.objects.create(owner=self.alice, household=self.household, weight_kg="90.00")
+        self.bob_weight = WeightEntry.objects.create(owner=self.bob, weight_kg="75.00")
+        FoodEntry.objects.create(owner=self.bob, food_name="Private breakfast", calories_kcal="350")
+        grocery = GroceryList.objects.create(owner=self.bob, name="My private list")
+        GroceryItem.objects.create(grocery_list=grocery, name="Apples", quantity="4")
+        workout = WorkoutSession.objects.create(owner=self.bob, title="My workout")
+        WorkoutSet.objects.create(
+            session=workout,
+            exercise_key="squat",
+            exercise_name="Squat",
+            set_number=1,
+            reps=10,
+            weight_kg="40.00",
+        )
+
+    def test_export_requires_authentication(self):
+        response = self.client.get("/api/v1/export/")
+        self.assertIn(response.status_code, (401, 403))
+
+    def test_export_contains_only_current_accounts_owned_records_and_nested_data(self):
+        self.client.force_authenticate(user=self.bob)
+        response = self.client.get("/api/v1/export/")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("attachment;", response["Content-Disposition"])
+        self.assertEqual(response["Cache-Control"], "no-store")
+        self.assertEqual(response.data["format"], "fitstart-v2-export")
+        self.assertEqual(
+            [row["id"] for row in response.data["records"]["weight_entries"]],
+            [self.bob_weight.pk],
+        )
+        self.assertNotIn("90.00", str(response.data["records"]["weight_entries"]))
+        self.assertEqual(
+            response.data["records"]["food_entries"][0]["food_name"],
+            "Private breakfast",
+        )
+        self.assertEqual(
+            response.data["records"]["grocery_lists"][0]["items"][0]["name"],
+            "Apples",
+        )
+        self.assertEqual(
+            response.data["records"]["workout_sessions"][0]["sets"][0]["exercise_name"],
+            "Squat",
+        )
+        serialized = str(response.data)
+        self.assertNotIn("cloudConfig", serialized)
+        self.assertNotIn("gist_token", serialized.lower())
+        self.assertNotIn("password", serialized.lower())
