@@ -1829,16 +1829,14 @@
             <div class="p-4 rounded-xl border border-blue-200 bg-blue-50/40 space-y-3">
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <span class="text-xs font-bold uppercase tracking-wider text-blue-700">1. Private Cloud Auto-Sync (You & Wife)</span>
-                  <h4 class="text-sm font-bold text-slate-900 mt-0.5">How Your Data Stays 100% Private</h4>
+                  <span class="text-xs font-bold uppercase tracking-wider text-blue-700">1. Optional GitHub Gist Sync</span>
+                  <h4 class="text-sm font-bold text-slate-900 mt-0.5">Optional Cloud Sync & Privacy Notes</h4>
                 </div>
                 <span id="cloudStatusPill" class="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-200 text-slate-700">
                   Local Device Mode
                 </span>
               </div>
-              <p class="text-xs text-slate-600 leading-relaxed">
-                <strong>Strangers visiting your public URL cannot see or edit your data!</strong> Your GitHub Token and Cloud Sync ID are stored <em>only</em> inside your phone's private memory and connect to a <strong>Secret GitHub Gist</strong>. Paste your <code>ghp_...</code> token below once, click <strong>Save & Sync to GitHub Cloud</strong>, and then tap <strong>ðŸ“± Copy Wife's Phone Pairing Link</strong> to text her a 1-tap setup link!
-              </p>
+              <p class="text-xs text-slate-600 leading-relaxed"><strong>Privacy warning:</strong> A private GitHub Gist is not end-to-end encrypted. GitHub stores the sync data; anyone with access to that GitHub account can read it. A GitHub Personal Access Token grants account access. FitStart keeps the token only in this browser tab and does not save it across reloads. Do not put a token in a URL or share it. To move data to another device, use Export JSON Backup and Import. Shared live sync for two people should use a private backend with separate logins.</p>
 
               <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
@@ -1855,19 +1853,13 @@
               </div>
 
               <div class="flex flex-wrap items-center gap-2 pt-1">
-                <button type="button" id="connectGistBtn" class="py-2 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition">
-                  â˜ï¸ Save & Sync to GitHub Cloud
-                </button>
+                <button type="button" id="connectGistBtn" class="py-2 px-3.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold transition">Save / Sync to GitHub Gist</button>
                 <button type="button" id="pullGistBtn" class="py-2 px-3.5 rounded-lg bg-white border border-blue-300 hover:bg-blue-50 text-blue-800 text-xs font-semibold transition">
                   ðŸ”„ Pull Latest from Cloud
                 </button>
-                <button type="button" id="pairWifePhoneBtn" class="py-2 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition">
-                  ðŸ“± Copy Wife's Phone Pairing Link
-                </button>
-                <button type="button" id="copySyncLinkBtn" class="py-2 px-3.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold transition">
-                  ðŸ”— Copy Instant Sync Link
-                </button>
-                <button type="button" id="disconnectCloudBtn" class="py-2 px-3 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold transition" title="Wipe saved GitHub Token from this browser">
+                <button type="button" id="pairWifePhoneBtn" class="py-2 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold transition">Pairing disabled - use JSON backup</button>
+                <button type="button" id="copySyncLinkBtn" class="py-2 px-3.5 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold transition">Snapshot links disabled - use JSON backup</button>
+                <button type="button" id="disconnectCloudBtn" class="py-2 px-3 rounded-lg border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-semibold transition" title="Forget the GitHub token from this browser tab">
                   ðŸ›¡ï¸ Revoke / Forget Token on Device
                 </button>
               </div>
@@ -2121,12 +2113,10 @@
         if (window.location.hash && window.location.hash.startsWith('#pair=')) {
           const encoded = window.location.hash.replace('#pair=', '');
           const pairObj = JSON.parse(decodeURIComponent(escape(atob(encoded))));
-          const tok = pairObj.token || pairObj.tok;
           const gId = pairObj.gistId || pairObj.id || '';
           const prof = pairObj.profile || pairObj.prof || 'wife';
-          if (tok) {
-            cloudConfig = { token: tok, gistId: gId };
-            localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+          if (gId) {
+            cloudConfig = { token: '', gistId: gId };
             appData.activeProfileId = prof;
             if (window.history && window.history.replaceState) {
               window.history.replaceState(null, '', window.location.pathname);
@@ -2166,8 +2156,9 @@
           }
         }
         const rawCloud = localStorage.getItem(CLOUD_CONFIG_KEY);
-        if (rawCloud && !cloudConfig.token) {
-          cloudConfig = JSON.parse(rawCloud) || { token: '', gistId: '' };
+        if (rawCloud) {
+          const savedCloud = JSON.parse(rawCloud) || {};
+          cloudConfig = { token: '', gistId: savedCloud.gistId || '' };
         }
       } catch (err) {}
     }
@@ -2260,7 +2251,7 @@
         if (patchRes.ok) {
           const patchData = await patchRes.json();
           cloudConfig.gistId = patchData.id;
-          localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+          localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ gistId: cloudConfig.gistId }));
           const badge = document.getElementById('saveStatusBadge');
           if (badge) badge.textContent = 'âœ“ Synced to Private Cloud';
         }
@@ -6280,7 +6271,7 @@
         cloudConfig.gistId = data.id;
         document.getElementById('gistIdInput').value = data.id;
         try {
-          localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(cloudConfig));
+          localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify({ gistId: cloudConfig.gistId }));
         } catch (e) {}
         populateFormFromActiveProfile();
         saveToStorage();
@@ -6334,45 +6325,11 @@
     });
 
     document.getElementById('pairWifePhoneBtn').addEventListener('click', () => {
-      const token = document.getElementById('gistTokenInput').value.trim() || cloudConfig.token;
-      const gistId = document.getElementById('gistIdInput').value.trim() || cloudConfig.gistId;
-      if (!token) {
-        showCloudMessage('First paste your GitHub Token!');
-        return;
-      }
-      const payload = btoa(unescape(encodeURIComponent(JSON.stringify({ token, gistId, profile: 'wife' }))));
-      const baseUrl = window.location.href.split('#')[0];
-      const pairUrl = `${baseUrl}#pair=${payload}`;
-      try {
-        const tempInput = document.createElement('input');
-        tempInput.value = pairUrl;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        showCloudMessage("âœ“ Wife's Private Pairing Link copied! Text this link to your wifeâ€”when she opens it once, her phone automatically links to your private cloud and hides the token from the address bar.");
-      } catch (e) {
-        showCloudMessage("âœ“ Pairing ready!");
-      }
+      showCloudMessage('Pairing links are disabled because they can expose GitHub credentials. Use Export JSON Backup on this device, then Import on the other device. Secure live sharing between two people needs a private backend with separate logins.');
     });
 
     document.getElementById('copySyncLinkBtn').addEventListener('click', () => {
-      const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(appData))));
-      const baseUrl = window.location.href.split('#')[0];
-      const syncUrl = `${baseUrl}#sync=${encoded}`;
-      window.location.hash = `sync=${encoded}`;
-
-      try {
-        const tempInput = document.createElement('input');
-        tempInput.value = syncUrl;
-        document.body.appendChild(tempInput);
-        tempInput.select();
-        document.execCommand('copy');
-        document.body.removeChild(tempInput);
-        showCloudMessage('âœ“ Snapshot Link copied! Sending this link sends YOUR current screen data to the other device.');
-      } catch (err) {
-        showCloudMessage('âœ“ URL updated with your current snapshot!');
-      }
+      showCloudMessage('Snapshot links put your health and progress data directly into the URL and browser history. Use Export JSON Backup and Import instead.');
     });
 
     // --- Standard Event Listeners ---
@@ -7274,9 +7231,7 @@
     checkPinLockOnLoad();
     populateFormFromActiveProfile();
     renderAll();
-if (cloudConfig.token) {
-      document.getElementById('pullGistBtn').click();
-    }
+
   </script>
 </body>
 </html>
