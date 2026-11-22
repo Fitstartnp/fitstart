@@ -190,6 +190,8 @@ class PersonalRecordApiTests(APITestCase):
         self.assertEqual(response.status_code, 201, response.data)
         self.assertEqual(response.data["owner"], self.alice.pk)
         self.assertIsNone(response.data["household"])
+        self.alice.refresh_from_db()
+        self.assertEqual(str(self.alice.personal_profile.current_weight_kg), "81.50")
         listing = self.client.get("/api/v1/weight-entries/")
         self.assertEqual(listing.status_code, 200)
         self.assertEqual(len(listing.data), 1)
