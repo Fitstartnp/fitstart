@@ -10,10 +10,10 @@ This folder contains the new multi-user platform. The root `index.html` remains 
 - **Households:** owner/admin/member roles, invitation email API, seven-day single-use token, SHA-256 token digest at rest, verified-email acceptance, CSRF-protected acceptance page.
 - **Profile and privacy:** personal profile auto-created for new accounts; sharing switches default to private.
 - **Data model:** weight history, body measurements, food diary, water entries, meal plan entries, grocery lists/items, workout sessions/sets, fasting sessions, and goals.
-- **API:** owner-scoped CRUD for weight, body measurements, food, water, meal plans, grocery lists, workouts, fasting, and goals. Shared reads are allowed only for the selected household/category; writes remain owner-only.
-- **Frontend:** responsive first dashboard for summary counts, weight/food/workout/goal creation and lists, profile/sharing settings, household creation, and invitation sending.
-- **Tests:** local Windows checkout passes 33 Django tests, including dashboard render/static assets, invitation onboarding, record CRUD, private-by-default sharing, and household read/write isolation. GitHub Actions runs the same suite.
-- **Still pending:** nested CRUD endpoints for grocery items and workout sets; water, meal-plan, body-measurement, fasting, and grocery forms in the dashboard; recipe and exercise catalogue migration; full nutrition target/calculator UI; V1 JSON backup import/export; full browser interaction and accessibility testing; production PostgreSQL/SMTP installation and deployment; domain and TLS setup.
+- **API:** owner-scoped CRUD for weight, body measurements, food, water, meal plans, grocery lists/items, workouts/sets, fasting, and goals. Shared reads are allowed only for the selected household/category; writes remain owner-only. Shared records become private again when their owner leaves the household.
+- **Frontend:** responsive first dashboard for summary counts, weight, measurements, food, hydration, meal planning, grocery lists/items, workouts/sets, fasting, goals, profile/sharing settings, household creation, and invitation sending. Workout and fasting sessions can be ended by their owners.
+- **Tests:** local Windows checkout passes 37 Django tests, including dashboard render/static assets, invitation onboarding, record CRUD, private-by-default sharing, and household read/write isolation. GitHub Actions runs the same suite.
+- **Still pending:** recipe and exercise catalogue migration; nutrition-target/calculator interface; V1 JSON backup import/export; recipe and exercise catalogue migration; full browser interaction and accessibility testing; production PostgreSQL/SMTP installation and deployment; domain and TLS setup.
 
 ## Local development (Windows PowerShell)
 
