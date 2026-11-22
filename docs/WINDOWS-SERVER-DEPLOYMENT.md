@@ -50,7 +50,7 @@ Before public launch:
 3. Create the application directory (suggested `C:\\FitStart\\app`) and a Python virtual environment. Install the pinned Python requirements.
 4. Generate a random Django SECRET_KEY outside the repository. Store it in a machine-protected environment/config file with restrictive ACLs. Do not place secrets in Git, static JavaScript, or a public web directory.
 5. Configure `.env` values: production DEBUG=false, ALLOWED_HOSTS, CSRF_TRUSTED_ORIGINS, secret key, database connection, email settings, and secure-cookie settings.
-6. Apply Django migrations, collect static assets, create the first platform administrator, and run `manage.py check --deploy`.
+6. Apply Django migrations, run `manage.py import_v1_catalog` to load the 160 recipes and 80 exercise definitions, collect static assets, create the first platform administrator, and run `manage.py check --deploy`.
 7. Run Waitress bound to `127.0.0.1:8000` under a Windows service wrapper with automatic restart and logs.
 8. Install Caddy as a Windows service. Configure the confirmed domain to reverse-proxy to `127.0.0.1:8000`. Caddy obtains and renews certificates after DNS and inbound reachability are correct.
 9. Open public 80/443 in both provider firewall and Windows Firewall. Keep 8000 and PostgreSQL private.
