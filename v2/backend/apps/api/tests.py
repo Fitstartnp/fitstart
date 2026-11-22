@@ -374,3 +374,52 @@ class NestedChildRecordApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(patch.status_code, 404)
+
+
+class TimedSessionPermissionsTests(APITestCase):
+    def setUp(self):
+        from apps.households.models import HouseholdMembership
+        from apps.tracking.models import WorkoutSession
+        from django.utils import timezone
+
+        self.owner = User.objects.create_user("timed-owner@example.com", "long-owner-password")
+        self.member = User.objects.create_user("timed-member@example.com", "long-member-password")
+        self.household = create_household(owner=self.owner, name="Timed session home")
+        HouseholdMembership.objects.create(
+            household=self.household,
+            user=self.member,
+            role=HouseholdMembership.Role.MEMBER,
+            status=HouseholdMembership.Status.ACTIVE,
+        )
+        profile = self.owner.personal_profile
+        profile.share_workout_history = True
+        profile.share_fasting_sessions = True
+        profile.save(update_fields=("share_workout_history", "share_fasting_sessions", "updated_at"))
+        self.workout = WorkoutSession(
+            owner=self.owner,
+            household=self.household,
+            title="Shared workout",
+            started_at=timezone.now(),
+        )
+        self.workout.full_clean()
+        self.workout.save()
+
+    def test_only_owner_can_finish_shared_workout(self):
+        from django.utils import timezone
+
+        self.client.force_authenticate(user=self.member)
+        denied = self.client.patch(
+            f"/api/v1/workout-sessions/{self.workout.pk}/",
+            {"ended_at": timezone.now().isoformat()},
+            format="json",
+        )
+        self.assertEqual(denied.status_code, 404)
+
+        self.client.force_authenticate(user=self.owner)
+        finished = self.client.patch(
+            f"/api/v1/workout-sessions/{self.workout.pk}/",
+            {"ended_at": (timezone.now() + timezone.timedelta(minutes=1)).isoformat()},
+            format="json",
+        )
+        self.assertEqual(finished.status_code, 200, finished.data)
+        self.assertIsNotNone(finished.data["ended_at"])
