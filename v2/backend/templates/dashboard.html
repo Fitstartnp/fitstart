@@ -220,6 +220,24 @@
         </form>
         <div id="profileStatus" class="status" aria-live="polite"></div>
       </section>
+      <section class="panel full" id="importPanel">
+        <h2>Import a FitStart V1 backup</h2>
+        <p class="section-note">Choose one profile from your exported fitstart-progress-backup.json file. Preview the counts and warnings before confirming. The other person's profile is not copied into this account.</p>
+        <form id="v1ImportForm" data-status="importStatus">
+          <div class="form-grid">
+            <div class="field"><label for="v1BackupFile">V1 JSON backup</label><input id="v1BackupFile" name="backup_file" type="file" accept="application/json,.json" required></div>
+            <div class="field"><label for="v1ProfileChoice">Profile to import into this account</label><select id="v1ProfileChoice" name="profile_id"><option value="husband">Husband profile</option><option value="wife">Wife profile</option></select></div>
+          </div>
+          <div class="form-actions"><button class="btn" type="submit">Preview import</button></div>
+        </form>
+        <div id="importStatus" class="status" aria-live="polite"></div>
+        <div id="v1ImportPreview" class="panel mt-3" hidden>
+          <h3>Import preview</h3>
+          <div id="v1ImportPreviewContent"></div>
+          <div class="form-actions"><button id="confirmV1ImportButton" class="btn" type="button">Confirm and import this profile</button></div>
+        </div>
+      </section>
+
       <section class="panel full" id="householdPanel">
         <h2>Households</h2>
         <p class="section-note">Create a private household space and invite people by email. Household membership does not reveal personal records unless their owner enables sharing.</p>
