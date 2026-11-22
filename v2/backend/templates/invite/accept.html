@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Join a FitStart household</title>
+  <style>
+    :root{color-scheme:light;--ink:#24201d;--paper:#f3ece1;--card:#fbf8f3;--line:#d8cbb8;--teal:#2d6a6e}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px;background:var(--paper);font:16px system-ui,sans-serif;color:var(--ink)}
+    main{width:min(100%,460px);padding:32px;border:1px solid var(--line);border-radius:20px;background:var(--card);box-shadow:0 16px 50px #24201d12}
+    h1{margin:0 0 8px;font-size:2rem}p{color:#625950;line-height:1.5}label{display:block;margin:14px 0 6px;font-size:.9rem;font-weight:650}
+    input{width:100%;padding:12px;border:1px solid var(--line);border-radius:9px;font:inherit}button,.link{display:inline-block;margin-top:18px;padding:12px 15px;border:0;border-radius:9px;background:var(--teal);color:white;font:inherit;font-weight:700;text-decoration:none;cursor:pointer}
+    button:disabled{opacity:.6;cursor:wait}.muted{font-size:.86rem}.error{color:#9b2929}.success{color:#17643e}.hidden{display:none}
+  </style>
+</head>
+<body>
+<main>
+  <h1>Join FitStart</h1>
+  <p id="intro">Checking your one-time household invitation…</p>
+  <div id="notice" role="status" aria-live="polite"></div>
+  <form id="acceptForm" class="hidden">
+    <p id="accountMode"></p>
+    <div id="passwordFields">
+      <label for="password">Create a password</label>
+      <input id="password" name="password" type="password" minlength="12" autocomplete="new-password">
+      <label for="passwordConfirm">Confirm password</label>
+      <input id="passwordConfirm" name="passwordConfirm" type="password" minlength="12" autocomplete="new-password">
+      <p class="muted">Use at least 12 characters. Your invitation is tied to the email address it was sent to.</p>
+    </div>
+    <button id="acceptButton" type="submit">Accept invitation</button>
+  </form>
+  <p id="signInLink" class="muted hidden"><a href="/accounts/login/">Sign in to your existing account</a>, then reopen the invitation email.</p>
+</main>
+<script>
+(() => {
+  const form = document.getElementById("acceptForm");
+  const notice = document.getElementById("notice");
+  const intro = document.getElementById("intro");
+  const passwordFields = document.getElementById("passwordFields");
+  const accountMode = document.getElementById("accountMode");
+  const button = document.getElementById("acceptButton");
+  const signInLink = document.getElementById("signInLink");
+
+  // Invitation token is in the URL fragment so it is not sent in HTTP requests or access logs.
+  // Hold it only in this page's memory; immediately remove it from the visible URL/history.
+  let invitationToken = window.location.hash.length > 1 ? window.location.hash.slice(1) : "";
+  window.history.replaceState(null, "", window.location.pathname);
+
+  function showMessage(message, kind) {
+    notice.className = kind || "";
+    notice.textContent = message;
+  }
+
+  function getCookie(name) {
+    const prefix = name + "=";
+    const part = document.cookie.split(";").map(x => x.trim()).find(x => x.startsWith(prefix));
+    return part ? decodeURIComponent(part.slice(prefix.length)) : "";
+  }
+
+  async function init() {
+    if (!invitationToken || invitationToken.length > 128) {
+      intro.textContent = "This invitation link is missing or invalid.";
+      showMessage("Open the original invitation email to use the one-time link.", "error");
+      return;
+    }
+    try {
+      const response = await fetch("/api/v1/me/", { credentials: "same-origin" });
+      if (response.ok) {
+        const account = await response.json();
+        intro.textContent = "You have been invited to join a FitStart household.";
+        accountMode.textContent = "You are signed in as " + account.email + ". Accepting will use this account.";
+        passwordFields.classList.add("hidden");
+        document.getElementById("password").required = false;
+      } else {
+        intro.textContent = "Create your FitStart account to accept this household invitation.";
+        accountMode.textContent = "This invitation is linked to the email address it was sent to.";
+        document.getElementById("password").required = true;
+        document.getElementById("passwordConfirm").required = true;
+      }
+      form.classList.remove("hidden");
+    } catch (error) {
+      intro.textContent = "Unable to check the invitation right now.";
+      showMessage("Please reload this page from the original email when the server is available.", "error");
+    }
+  }
+
+  form.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!invitationToken) {
+      showMessage("The invitation token is no longer available. Reopen the original invitation email.", "error");
+      return;
+    }
+    const data = { token: invitationToken };
+    if (!passwordFields.classList.contains("hidden")) {
+      const password = document.getElementById("password").value;
+      const confirm = document.getElementById("passwordConfirm").value;
+      if (password !== confirm) {
+        showMessage("The passwords do not match.", "error");
+        return;
+      }
+      if (password.length < 12) {
+        showMessage("Choose a password with at least 12 characters.", "error");
+        return;
+      }
+      data.password = password;
+    }
+    const csrfToken = getCookie("csrftoken");
+    if (!csrfToken) {
+      showMessage("Security cookie missing. Reload the invitation page and try again.", "error");
+      return;
+    }
+    button.disabled = true;
+    button.textContent = "Accepting…";
+    showMessage("", "");
+    try {
+      const response = await fetch("/api/v1/invitations/accept/", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken },
+        body: JSON.stringify(data)
+      });
+      const result = await response.json();
+      if (response.ok) {
+        invitationToken = "";
+        showMessage("Invitation accepted. Opening your FitStart space…", "success");
+        window.location.replace("/");
+        return;
+      }
+      if (response.status === 409) {
+        invitationToken = "";
+        form.classList.add("hidden");
+        signInLink.classList.remove("hidden");
+        showMessage("An account already exists for this invited email. Sign in with that account, then reopen the invitation email to accept it.", "error");
+      } else if (response.status === 403) {
+        showMessage(result.detail || "This invitation is for a different email address. Sign in with the invited account.", "error");
+      } else {
+        showMessage(result.detail || result.password?.join(" ") || "The invitation could not be accepted.", "error");
+      }
+    } catch (error) {
+      showMessage("The server could not process this invitation. Please try again.", "error");
+    } finally {
+      button.disabled = false;
+      button.textContent = "Accept invitation";
+    }
+  });
+
+  init();
+})();
+</script>
+</body>
+</html>
