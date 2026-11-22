@@ -1,3 +1,8 @@
+import hashlib
+import json
+from datetime import datetime, time
+from decimal import Decimal, InvalidOperation
+
 from django.conf import settings
 from django.contrib.auth import login
 from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
@@ -14,7 +19,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
-from apps.audit.models import AuditEvent
+from apps.audit.models import AuditEvent, DataImportBatch
 from apps.households.models import Household, HouseholdInvitation, HouseholdMembership
 from apps.households.services import accept_invitation, create_household, create_invitation
 from apps.profiles.models import PersonalProfile
@@ -488,3 +493,258 @@ class WorkoutSetDetailView(APIView):
         _, record = self.get_parent_and_set(request, session_id, set_id, owner_only=True)
         record.delete()
         return Response(status=204)
+
+
+def _v1_decimal(value, *, minimum=Decimal("0"), maximum=Decimal("1000000")):
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, TypeError, ValueError):
+        return None
+    if not result.is_finite() or result < minimum or result > maximum:
+        return None
+    return result
+
+
+def _v1_import_plan(request, *, backup, profile_id):
+    if not isinstance(backup, dict) or not isinstance(backup.get("profiles"), dict):
+        raise ValidationError({"backup": "Choose a valid FitStart V1 JSON backup containing profiles."})
+    if profile_id not in ("husband", "wife"):
+        raise ValidationError({"profile_id": "Choose either the husband or wife profile."})
+    raw = backup["profiles"].get(profile_id)
+    if not isinstance(raw, dict):
+        raise ValidationError({"profile_id": "That profile is not present in the selected backup."})
+
+    weight_logs = raw.get("weightLogs", [])
+    food_diary = raw.get("foodDiary", [])
+    if not isinstance(weight_logs, list) or not isinstance(food_diary, list):
+        raise ValidationError({"backup": "The selected profile has an invalid weight or food log."})
+    if len(weight_logs) > 5000 or len(food_diary) > 5000:
+        raise ValidationError({"backup": "This backup exceeds the 5,000-entry per-log import limit."})
+
+    weights = []
+    measurements = []
+    invalid_weights = 0
+    for entry in weight_logs:
+        if not isinstance(entry, dict):
+            invalid_weights += 1
+            continue
+        kg = _v1_decimal(entry.get("weightKg"), minimum=Decimal("0.1"), maximum=Decimal("400"))
+        try:
+            measured_on = datetime.strptime(str(entry.get("date", "")), "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            measured_on = None
+        if kg is None or measured_on is None:
+            invalid_weights += 1
+            continue
+        weights.append({
+            "measured_on": measured_on,
+            "weight_kg": kg,
+            "note": str(entry.get("note", ""))[:500],
+        })
+        waist = _v1_decimal(entry.get("waistCm"), minimum=Decimal("0.1"), maximum=Decimal("300"))
+        if waist is not None:
+            local_noon = datetime.combine(measured_on, time(12, 0))
+            measurements.append({
+                "measured_at": timezone.make_aware(local_noon, timezone.get_current_timezone()),
+                "waist_cm": waist,
+            })
+
+    foods = []
+    invalid_foods = 0
+    for entry in food_diary:
+        if not isinstance(entry, dict) or not str(entry.get("name", "")).strip():
+            invalid_foods += 1
+            continue
+        calories = _v1_decimal(entry.get("kcal"), minimum=Decimal("0"), maximum=Decimal("100000"))
+        protein = _v1_decimal(entry.get("p", 0), minimum=Decimal("0"), maximum=Decimal("10000"))
+        carbs = _v1_decimal(entry.get("c", 0), minimum=Decimal("0"), maximum=Decimal("10000"))
+        fat = _v1_decimal(entry.get("f", 0), minimum=Decimal("0"), maximum=Decimal("10000"))
+        fiber = _v1_decimal(entry.get("fib", 0), minimum=Decimal("0"), maximum=Decimal("10000"))
+        foods.append({
+            "food_name": str(entry["name"]).strip()[:180],
+            "calories_kcal": calories,
+            "protein_g": protein,
+            "carbs_g": carbs,
+            "fat_g": fat,
+            "fiber_g": fiber,
+        })
+
+    glasses = raw.get("waterGlasses", 0)
+    if isinstance(glasses, bool):
+        glasses = 0
+    try:
+        glasses = max(0, min(int(glasses), 40))
+    except (TypeError, ValueError):
+        glasses = 0
+
+    metric_fields = {
+        "name": ("display_name", lambda v: str(v)[:80]),
+        "age": ("age", lambda v: int(v)),
+        "gender": ("gender", lambda v: v if v in ("male", "female", "other") else "other"),
+        "heightCm": ("height_cm", lambda v: _v1_decimal(v, minimum=Decimal("100"), maximum=Decimal("250"))),
+        "startWeightKg": ("start_weight_kg", lambda v: _v1_decimal(v, minimum=Decimal("30"), maximum=Decimal("400"))),
+        "currentWeightKg": ("current_weight_kg", lambda v: _v1_decimal(v, minimum=Decimal("30"), maximum=Decimal("400"))),
+        "goalWeightKg": ("goal_weight_kg", lambda v: _v1_decimal(v, minimum=Decimal("30"), maximum=Decimal("400"))),
+        "activityMultiplier": ("activity_multiplier", lambda v: _v1_decimal(v, minimum=Decimal("1"), maximum=Decimal("3"))),
+        "dailyDeficit": ("daily_deficit_kcal", lambda v: int(v)),
+        "dietType": ("diet_type", lambda v: str(v)[:30]),
+        "workoutMode": ("workout_mode", lambda v: v if v in ("home", "gym") else "home"),
+        "fitnessLevel": ("fitness_level", lambda v: v if v in ("beginner", "intermediate", "advanced") else "beginner"),
+    }
+    profile_updates = {}
+    invalid_profile_fields = []
+    for source, (target, convert) in metric_fields.items():
+        if source not in raw:
+            continue
+        try:
+            value = convert(raw[source])
+        except (ValueError, TypeError, InvalidOperation):
+            value = None
+        if value is None:
+            invalid_profile_fields.append(source)
+        else:
+            profile_updates[target] = value
+
+    unit = backup.get("unit")
+    if unit in ("metric", "imperial"):
+        profile_updates["unit_system"] = unit
+
+    supported = {
+        "name", "age", "gender", "heightCm", "startWeightKg", "currentWeightKg",
+        "goalWeightKg", "activityMultiplier", "dailyDeficit", "dietType",
+        "workoutMode", "fitnessLevel", "waterGlasses", "foodDiary", "weightLogs",
+    }
+    unsupported = sorted(
+        key for key, value in raw.items()
+        if key not in supported and value not in (None, "", [], {})
+    )
+    fingerprint_source = json.dumps(
+        {"profile_id": profile_id, "profile": raw, "unit": unit},
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    fingerprint = hashlib.sha256(fingerprint_source).hexdigest()
+    duplicate = DataImportBatch.objects.filter(actor=request.user, fingerprint=fingerprint).exists()
+
+    return {
+        "profile_id": profile_id,
+        "fingerprint": fingerprint,
+        "profile_updates": profile_updates,
+        "weights": weights,
+        "measurements": measurements,
+        "foods": foods,
+        "water_ml": glasses * 250,
+        "invalid_weights": invalid_weights,
+        "invalid_foods": invalid_foods,
+        "invalid_profile_fields": invalid_profile_fields,
+        "unsupported_fields": unsupported,
+        "duplicate": duplicate,
+        "counts": {
+            "weight_entries": len(weights),
+            "body_measurements": len(measurements),
+            "food_entries": len(foods),
+            "water_glasses": glasses,
+            "water_ml_estimate": glasses * 250,
+        },
+    }
+
+
+class V1ImportPreviewView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        plan = _v1_import_plan(
+            request,
+            backup=request.data.get("backup"),
+            profile_id=request.data.get("profile_id"),
+        )
+        return Response({
+            "source_profile": plan["profile_id"],
+            "counts": plan["counts"],
+            "profile_fields_to_update": sorted(plan["profile_updates"].keys()),
+            "invalid_entries_skipped": {
+                "weight_logs": plan["invalid_weights"],
+                "food_diary": plan["invalid_foods"],
+                "profile_fields": plan["invalid_profile_fields"],
+            },
+            "unsupported_fields": plan["unsupported_fields"],
+            "already_imported": plan["duplicate"],
+            "warnings": [
+                "V1 food diary entries have no timestamps; they will be assigned the import time.",
+                "V1 waterGlasses is a current-day counter, not a dated history. The importer converts it to one estimated total using 250 ml per glass.",
+                "Only the selected person's profile is imported. The other partner's data is not copied to this account.",
+                "Existing V2 logs are preserved; imported entries are appended. Profile settings listed above will be updated.",
+            ],
+        })
+
+
+class V1ImportCommitView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if request.data.get("confirm") is not True:
+            raise ValidationError({"confirm": "Review the preview, then send confirm=true to import."})
+        with transaction.atomic():
+            plan = _v1_import_plan(
+                request,
+                backup=request.data.get("backup"),
+                profile_id=request.data.get("profile_id"),
+            )
+            if plan["duplicate"]:
+                return Response({"detail": "This exact V1 profile backup has already been imported into this account."}, status=409)
+
+            profile, _ = PersonalProfile.objects.get_or_create(user=request.user)
+            for field, value in plan["profile_updates"].items():
+                setattr(profile, field, value)
+            try:
+                profile.full_clean()
+            except DjangoValidationError as exc:
+                raise ValidationError(getattr(exc, "message_dict", exc.messages)) from exc
+            profile.save()
+
+            WeightEntry.objects.bulk_create([
+                WeightEntry(owner=request.user, **entry) for entry in plan["weights"]
+            ])
+            BodyMeasurement.objects.bulk_create([
+                BodyMeasurement(owner=request.user, **entry) for entry in plan["measurements"]
+            ])
+            import_time = timezone.now()
+            FoodEntry.objects.bulk_create([
+                FoodEntry(
+                    owner=request.user,
+                    logged_at=import_time,
+                    meal_slot=FoodEntry.MealSlot.OTHER,
+                    quantity=1,
+                    **entry,
+                )
+                for entry in plan["foods"]
+            ])
+            if plan["water_ml"] > 0:
+                WaterEntry.objects.create(owner=request.user, amount_ml=plan["water_ml"], logged_at=import_time)
+
+            batch = DataImportBatch.objects.create(
+                actor=request.user,
+                source_profile=plan["profile_id"],
+                fingerprint=plan["fingerprint"],
+                counts=plan["counts"],
+            )
+            AuditEvent.objects.create(
+                actor=request.user,
+                event_type="data.v1_import.completed",
+                target_type="v1_import",
+                target_id=str(batch.pk),
+                metadata={"source_profile": plan["profile_id"], **plan["counts"]},
+            )
+
+        return Response({
+            "detail": "V1 profile imported.",
+            "source_profile": plan["profile_id"],
+            "counts": plan["counts"],
+            "unsupported_fields": plan["unsupported_fields"],
+            "invalid_entries_skipped": {
+                "weight_logs": plan["invalid_weights"],
+                "food_diary": plan["invalid_foods"],
+                "profile_fields": plan["invalid_profile_fields"],
+            },
+        }, status=201)
