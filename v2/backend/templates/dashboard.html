@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FitStart · Your space</title>
+  <style>
+    :root{--ink:#24201d;--paper:#f3ece1;--card:#fbf8f3;--line:#d8cbb8;--teal:#2d6a6e}
+    *{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--paper);color:var(--ink);font:16px system-ui,sans-serif}
+    header{padding:20px max(24px,calc((100vw - 1000px)/2));display:flex;align-items:center;justify-content:space-between;gap:18px;border-bottom:1px solid var(--line);background:var(--card)}
+    main{width:min(100% - 32px,1000px);margin:40px auto}.panel{padding:26px;border:1px solid var(--line);border-radius:18px;background:var(--card)}
+    button{padding:10px 16px;background:var(--teal);color:white;border:0;border-radius:8px;font-weight:700;cursor:pointer}
+    small{color:#625950}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:22px}
+    .tile{padding:18px;border:1px solid var(--line);border-radius:12px;background:#fff}
+  </style>
+</head>
+<body>
+<header>
+  <strong>FitStart</strong>
+  <div>
+    <span>{{ request.user.email }}</span>
+    <form method="post" action="{% url 'logout' %}" style="display:inline;margin-left:14px">
+      {% csrf_token %}<button type="submit">Sign out</button>
+    </form>
+  </div>
+</header>
+<main>
+  <section class="panel">
+    <h1>Your FitStart space</h1>
+    <p>Your account is active. Private nutrition and progress records will belong to your account. Household sharing will be opt-in by category.</p>
+    <div class="grid">
+      <div class="tile"><strong>Personal profile</strong><p><small>Units, goals and preferences.</small></p></div>
+      <div class="tile"><strong>Nutrition</strong><p><small>Meal planning and food logs.</small></p></div>
+      <div class="tile"><strong>Training</strong><p><small>Workouts and exercise history.</small></p></div>
+      <div class="tile"><strong>Households</strong><p><small>Invite collaborators when sharing is available.</small></p></div>
+    </div>
+  </section>
+</main>
+</body>
+</html>
