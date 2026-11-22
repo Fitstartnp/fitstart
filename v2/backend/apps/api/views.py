@@ -1093,7 +1093,7 @@ def _v1_import_plan(request, *, backup, profile_id):
             clean_rows.append({
                 "setNum": set_number,
                 "reps": reps,
-                "weight": weight_kg,
+                "weight": str(weight_kg) if weight_kg is not None else None,
                 "type": clean_row["set_type"],
                 "done": clean_row["is_completed"],
             })
