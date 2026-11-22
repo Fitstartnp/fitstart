@@ -524,6 +524,35 @@
     showStatus("goalStatus", "Goal saved.", "success");
   });
 
+  bindForm("groceryItemForm", async (form) => {
+    const listId = Number(form.get("grocery_list"));
+    const body = {
+      name: form.get("name"),
+      quantity: form.get("quantity"),
+      category: form.get("category")
+    };
+    await api("/grocery-lists/" + listId + "/items/", { method: "POST", body });
+    $("groceryItemForm").reset();
+    await refreshRecords();
+    showStatus("groceryItemStatus", "Grocery item added.", "success");
+  });
+
+  bindForm("workoutSetForm", async (form) => {
+    const sessionId = Number(form.get("session"));
+    const body = {
+      exercise_key: form.get("exercise_key"),
+      exercise_name: form.get("exercise_name"),
+      set_number: Number(form.get("set_number")),
+      reps: form.get("reps") ? Number(form.get("reps")) : null,
+      weight_kg: form.get("weight_kg") || null,
+      duration_seconds: form.get("duration_seconds") ? Number(form.get("duration_seconds")) : null
+    };
+    await api("/workout-sessions/" + sessionId + "/sets/", { method: "POST", body });
+    $("workoutSetForm").reset();
+    await refreshRecords();
+    showStatus("workoutSetStatus", "Exercise set logged.", "success");
+  });
+
   bindForm("householdForm", async (form) => {
     const result = await api("/households/", { method: "POST", body: { name: form.get("name") } });
     $("householdForm").reset();
