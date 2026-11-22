@@ -59,3 +59,21 @@ class PersonalRecordSharingTests(TestCase):
         entry = WeightEntry(owner=self.charlie, household=self.home, weight_kg="74.00")
         with self.assertRaises(ValidationError):
             entry.full_clean()
+
+
+    def test_shared_records_become_private_when_owner_leaves_household(self):
+        profile = PersonalProfile.objects.get(user=self.alice)
+        profile.share_weight_history = True
+        profile.save(update_fields=("share_weight_history", "updated_at"))
+        entry = WeightEntry(owner=self.alice, household=self.home, weight_kg="82.40")
+        entry.full_clean()
+        entry.save()
+        self.assertTrue(WeightEntry.visible_to(self.bob).filter(pk=entry.pk).exists())
+
+        HouseholdMembership.objects.filter(
+            household=self.home,
+            user=self.alice,
+        ).delete()
+
+        self.assertFalse(WeightEntry.visible_to(self.bob).filter(pk=entry.pk).exists())
+        self.assertTrue(WeightEntry.visible_to(self.alice).filter(pk=entry.pk).exists())
