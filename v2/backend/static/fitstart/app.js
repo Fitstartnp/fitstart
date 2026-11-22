@@ -657,7 +657,11 @@
     state.goals = goals;
     await loadChildRecords();
     renderAll();
-    await loadCatalogs();
+    try {
+      await loadCatalogs();
+    } catch (error) {
+      showStatus("recipeStatus", "Recipe/workout catalogue not yet available. An administrator must run the V1 catalog import command.", "error");
+    }
     $("appLoading").hidden = true;
     $("appContent").hidden = false;
   }
@@ -708,7 +712,11 @@
     ].forEach((key) => { body[key] = form.get(key) === "on"; });
     state.profile = await api("/profile/", { method: "PATCH", body });
     renderProfile();
-    await loadCatalogs();
+    try {
+      await loadCatalogs();
+    } catch (error) {
+      showStatus("recipeStatus", "Catalogue refresh failed: " + error.message, "error");
+    }
     showStatus("profileStatus", "Profile and sharing settings saved.", "success");
   });
 
