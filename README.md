@@ -29,6 +29,7 @@ To deploy changes, update `index.html` on the `main` branch. GitHub Pages serves
 
 - By default, profile data is saved in the current browser's `localStorage`. It does not automatically move to another browser or device.
 - Use **Export JSON Backup** and **Import** to transfer data between devices. Treat exported backup files as sensitive because they contain profile and progress information.
+- The optional 4-digit PIN is a convenience screen lock, not encryption. Data in browser storage remains readable to someone with access to that browser profile.
 - Optional GitHub Gist sync sends the app data to GitHub. A private Gist is **not end-to-end encrypted**; GitHub stores the data and anyone with access to the GitHub account can read it. The token is held only in the current browser tab and is not persisted across reloads. Do not put tokens in URLs or share them.
 - The in-app publisher uses a separate fine-grained GitHub token. Restrict it to this repository and grant only **Contents: read and write**. The app publisher does not need an account-wide classic `repo` token.
 - Credential-bearing pairing links and data-in-URL snapshot links are disabled. Secure live sharing between two different people's accounts requires a private backend with separate authentication; GitHub Pages alone does not provide that.
