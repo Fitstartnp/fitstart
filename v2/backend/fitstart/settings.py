@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "apps.households",
     "apps.audit",
     "apps.api",
+    "apps.tracking",
 ]
 
 MIDDLEWARE = [
