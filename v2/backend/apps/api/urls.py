@@ -19,6 +19,11 @@ from .views import (
     MyDataExportView,
     WaterEntryViewSet,
     WeightEntryViewSet,
+    RecipeViewSet,
+    ExerciseViewSet,
+    WorkoutRoutineViewSet,
+    RecipeFavoritesView,
+    RecipeFavoriteDetailView,
     V1ImportCommitView,
     V1ImportPreviewView,
     WorkoutSessionViewSet,
@@ -27,6 +32,9 @@ from .views import (
 )
 
 router = DefaultRouter()
+router.register("recipes", RecipeViewSet, basename="recipe")
+router.register("exercises", ExerciseViewSet, basename="exercise")
+router.register("workout-routines", WorkoutRoutineViewSet, basename="workout-routine")
 router.register("weight-entries", WeightEntryViewSet, basename="weight-entry")
 router.register("body-measurements", BodyMeasurementViewSet, basename="body-measurement")
 router.register("food-entries", FoodEntryViewSet, basename="food-entry")
@@ -38,6 +46,8 @@ router.register("fasting-sessions", FastingSessionViewSet, basename="fasting-ses
 router.register("goals", GoalViewSet, basename="goal")
 
 urlpatterns = [
+    path("recipes/favorites/", RecipeFavoritesView.as_view(), name="api-recipe-favorites"),
+    path("recipes/favorites/<int:recipe_id>/", RecipeFavoriteDetailView.as_view(), name="api-recipe-favorite-detail"),
     path("grocery-lists/<int:grocery_list_id>/items/", GroceryItemListView.as_view(), name="api-grocery-items"),
     path("grocery-lists/<int:grocery_list_id>/items/<int:item_id>/", GroceryItemDetailView.as_view(), name="api-grocery-item-detail"),
     path("workout-sessions/<int:session_id>/sets/", WorkoutSetListView.as_view(), name="api-workout-sets"),
