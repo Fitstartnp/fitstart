@@ -13,13 +13,14 @@ from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import permissions, viewsets
+from rest_framework import mixins, permissions, viewsets
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.models import User
 from apps.audit.models import AuditEvent, DataImportBatch
+from apps.catalog.models import Exercise, Recipe, RecipeFavorite, WorkoutRoutine
 from apps.households.models import Household, HouseholdInvitation, HouseholdMembership
 from apps.households.services import accept_invitation, create_household, create_invitation
 from apps.profiles.models import PersonalProfile
@@ -48,6 +49,10 @@ from .serializers import (
     WorkoutSessionSerializer,
     GroceryItemSerializer,
     WorkoutSetSerializer,
+    RecipeSerializer,
+    ExerciseSerializer,
+    WorkoutRoutineSerializer,
+    RecipeFavoriteSerializer,
 )
 
 
@@ -831,3 +836,86 @@ class V1ImportCommitView(APIView):
                 "profile_fields": plan["invalid_profile_fields"],
             },
         }, status=201)
+
+
+class RecipeViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = RecipeSerializer
+    queryset = Recipe.objects.all()
+
+    def get_queryset(self):
+        queryset = Recipe.objects.all()
+        diet_style = self.request.query_params.get("diet_style")
+        slot = self.request.query_params.get("slot")
+        search = self.request.query_params.get("search")
+        if diet_style:
+            queryset = queryset.filter(diet_style=diet_style)
+        if slot:
+            queryset = queryset.filter(slot__iexact=slot)
+        if search:
+            queryset = queryset.filter(name__icontains=search[:120])
+        return queryset
+
+
+class ExerciseViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = ExerciseSerializer
+    queryset = Exercise.objects.all()
+
+    def get_queryset(self):
+        queryset = Exercise.objects.all()
+        search = self.request.query_params.get("search")
+        focus = self.request.query_params.get("focus")
+        if search:
+            queryset = queryset.filter(name__icontains=search[:120])
+        if focus:
+            queryset = queryset.filter(focus__icontains=focus[:120])
+        return queryset
+
+
+class WorkoutRoutineViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = WorkoutRoutineSerializer
+    queryset = WorkoutRoutine.objects.all()
+
+    def get_queryset(self):
+        queryset = WorkoutRoutine.objects.prefetch_related("exercise_links__exercise")
+        mode = self.request.query_params.get("mode")
+        level = self.request.query_params.get("level")
+        if mode:
+            queryset = queryset.filter(mode=mode)
+        if level:
+            queryset = queryset.filter(level=level)
+        return queryset
+
+
+class RecipeFavoritesView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        favorites = RecipeFavorite.objects.filter(user=request.user).select_related("recipe")
+        return Response(RecipeFavoriteSerializer(favorites, many=True, context={"request": request}).data)
+
+    def post(self, request):
+        recipe_id = request.data.get("recipe_id")
+        if isinstance(recipe_id, bool):
+            raise ValidationError({"recipe_id": "A recipe ID is required."})
+        try:
+            recipe_id = int(recipe_id)
+        except (TypeError, ValueError):
+            raise ValidationError({"recipe_id": "A valid recipe ID is required."})
+        recipe = get_object_or_404(Recipe, pk=recipe_id)
+        favorite, created = RecipeFavorite.objects.get_or_create(user=request.user, recipe=recipe)
+        return Response(
+            RecipeFavoriteSerializer(favorite, context={"request": request}).data,
+            status=201 if created else 200,
+        )
+
+
+class RecipeFavoriteDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, recipe_id: int):
+        favorite = get_object_or_404(RecipeFavorite, user=request.user, recipe_id=recipe_id)
+        favorite.delete()
+        return Response(status=204)
