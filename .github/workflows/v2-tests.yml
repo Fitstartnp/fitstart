@@ -86,5 +86,7 @@ jobs:
         run: python manage.py makemigrations --check --dry-run
       - name: Apply migrations to PostgreSQL
         run: python manage.py migrate --noinput
+      - name: Collect static assets
+        run: python manage.py collectstatic --noinput
       - name: Run account, household and API tests
         run: python manage.py test
