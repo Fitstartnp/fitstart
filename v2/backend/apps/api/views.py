@@ -28,6 +28,8 @@ from apps.tracking.models import (
     WaterEntry,
     WeightEntry,
     WorkoutSession,
+    GroceryItem,
+    WorkoutSet,
 )
 from .serializers import (
     BodyMeasurementSerializer,
@@ -39,6 +41,8 @@ from .serializers import (
     WaterEntrySerializer,
     WeightEntrySerializer,
     WorkoutSessionSerializer,
+    GroceryItemSerializer,
+    WorkoutSetSerializer,
 )
 
 
@@ -363,3 +367,99 @@ class MyProfileView(APIView):
         profile.full_clean()
         profile.save()
         return self.get(request)
+
+
+class GroceryItemListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent(self, request, grocery_list_id):
+        return get_object_or_404(
+            GroceryList.visible_to(request.user),
+            pk=grocery_list_id,
+        )
+
+    def get(self, request, grocery_list_id):
+        parent = self.get_parent(request, grocery_list_id)
+        items = parent.items.all()
+        return Response(GroceryItemSerializer(items, many=True).data)
+
+    def post(self, request, grocery_list_id):
+        parent = self.get_parent(request, grocery_list_id)
+        if parent.owner_id != request.user.pk:
+            return Response({"detail": "Only the grocery list owner can add items."}, status=403)
+        serializer = GroceryItemSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save(grocery_list=parent)
+        return Response(GroceryItemSerializer(item).data, status=201)
+
+
+class GroceryItemDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent_and_item(self, request, grocery_list_id, item_id, owner_only=False):
+        queryset = GroceryList.objects.filter(owner=request.user) if owner_only else GroceryList.visible_to(request.user)
+        parent = get_object_or_404(queryset, pk=grocery_list_id)
+        item = get_object_or_404(GroceryItem.objects.filter(grocery_list=parent), pk=item_id)
+        return parent, item
+
+    def get(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id)
+        return Response(GroceryItemSerializer(item).data)
+
+    def patch(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id, owner_only=True)
+        serializer = GroceryItemSerializer(item, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        item = serializer.save()
+        return Response(GroceryItemSerializer(item).data)
+
+    def delete(self, request, grocery_list_id, item_id):
+        _, item = self.get_parent_and_item(request, grocery_list_id, item_id, owner_only=True)
+        item.delete()
+        return Response(status=204)
+
+
+class WorkoutSetListView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent(self, request, session_id):
+        return get_object_or_404(WorkoutSession.visible_to(request.user), pk=session_id)
+
+    def get(self, request, session_id):
+        parent = self.get_parent(request, session_id)
+        return Response(WorkoutSetSerializer(parent.sets.all(), many=True).data)
+
+    def post(self, request, session_id):
+        parent = self.get_parent(request, session_id)
+        if parent.owner_id != request.user.pk:
+            return Response({"detail": "Only the workout owner can add sets."}, status=403)
+        serializer = WorkoutSetSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save(session=parent)
+        return Response(WorkoutSetSerializer(record).data, status=201)
+
+
+class WorkoutSetDetailView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_parent_and_set(self, request, session_id, set_id, owner_only=False):
+        queryset = WorkoutSession.objects.filter(owner=request.user) if owner_only else WorkoutSession.visible_to(request.user)
+        parent = get_object_or_404(queryset, pk=session_id)
+        record = get_object_or_404(WorkoutSet.objects.filter(session=parent), pk=set_id)
+        return parent, record
+
+    def get(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id)
+        return Response(WorkoutSetSerializer(record).data)
+
+    def patch(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id, owner_only=True)
+        serializer = WorkoutSetSerializer(record, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        record = serializer.save()
+        return Response(WorkoutSetSerializer(record).data)
+
+    def delete(self, request, session_id, set_id):
+        _, record = self.get_parent_and_set(request, session_id, set_id, owner_only=True)
+        record.delete()
+        return Response(status=204)
