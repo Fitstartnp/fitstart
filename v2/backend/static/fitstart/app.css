@@ -22,3 +22,7 @@ main{width:min(1180px,calc(100% - 32px));margin:30px auto 80px}.welcome{display:
 .catalog-card-header{display:flex;flex-direction:column;gap:2px}.catalog-card h3{margin:0;font-size:1rem;line-height:1.35;letter-spacing:-.02em}.catalog-card p{font-size:.84rem}.catalog-meta{margin:8px 0 12px;font-weight:750;color:var(--teal-dark)}
 .catalog-card details{margin-top:9px;padding:9px 10px;border-radius:9px;background:#f7f2eb;font-size:.83rem}.catalog-card summary{font-weight:750;cursor:pointer}.catalog-card ul,.catalog-card ol{padding-left:21px;margin:9px 0}.catalog-card li{margin:5px 0}.catalog-card details p{margin:8px 0}
 .catalog-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.catalog-card .btn{margin-top:0}
+
+.progress-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:13px 22px;margin:14px 0}
+.progress-row{min-width:0}.progress-heading{display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:.8rem}.progress-heading span{color:var(--muted);font-variant-numeric:tabular-nums}
+.progress-track{height:9px;border-radius:99px;background:#e7dfd4;overflow:hidden}.progress-fill{height:100%;border-radius:99px;background:var(--teal);transition:width .25s ease}
