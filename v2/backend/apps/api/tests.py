@@ -761,7 +761,7 @@ class MyDataExportApiTests(APITestCase):
         self.assertEqual(exported["exercise_offsets"], {"squat": 3})
         self.assertEqual(exported["completed_exercises"], {"squat": True})
         self.assertEqual(exported["streak_count"], 12)
-        self.assertEqual(exported["last_active_date"], timezone.localdate().isoformat())
+        self.assertEqual(exported["last_active_date"], timezone.localdate())
         self.assertEqual(exported["fasting_protocol_hours"], 18)
         self.assertTrue(exported["fasting_is_active"])
         self.assertEqual(exported["fasting_elapsed_minutes"], 240)
