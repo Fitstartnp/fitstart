@@ -273,6 +273,68 @@
     host.appendChild(wrap);
   }
 
+  function renderTimedSessions(hostId, records, kind) {
+    const host = $(hostId);
+    host.replaceChildren();
+    if (!records.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = kind === "workout" ? "No workout sessions yet." : "No fasting sessions yet.";
+      host.appendChild(empty);
+      return;
+    }
+    const table = document.createElement("table");
+    const header = document.createElement("thead");
+    const headerRow = document.createElement("tr");
+    const labels = kind === "workout" ? ["Started", "Workout", "Notes", "Action"] : ["Started", "Target", "Ended", "Action"];
+    labels.forEach((label) => addCell(headerRow, label));
+    header.appendChild(headerRow);
+    table.appendChild(header);
+    const body = document.createElement("tbody");
+    records.forEach((record) => {
+      const row = document.createElement("tr");
+      addCell(row, new Date(record.started_at).toLocaleString());
+      if (kind === "workout") {
+        addCell(row, record.title);
+        addCell(row, record.notes);
+      } else {
+        addCell(row, record.target_hours + " h");
+        addCell(row, record.ended_at ? new Date(record.ended_at).toLocaleString() : "In progress");
+      }
+      const action = document.createElement("td");
+      if (!record.ended_at && record.owner === state.account.id) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "btn small secondary";
+        button.textContent = kind === "workout" ? "Finish workout" : "End fast";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const path = kind === "workout" ? "/workout-sessions/" : "/fasting-sessions/";
+            await api(path + record.id + "/", {
+              method: "PATCH",
+              body: { ended_at: new Date().toISOString() }
+            });
+            await refreshRecords();
+          } catch (error) {
+            button.disabled = false;
+            showStatus(kind === "workout" ? "workoutStatus" : "fastingStatus", error.message, "error");
+          }
+        });
+        action.appendChild(button);
+      } else {
+        action.textContent = record.ended_at ? "Completed" : "Read only";
+      }
+      row.appendChild(action);
+      body.appendChild(row);
+    });
+    table.appendChild(body);
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    wrap.appendChild(table);
+    host.appendChild(wrap);
+  }
+
   function renderAll() {
     $("accountEmail").textContent = state.account.email;
     $("weightCount").textContent = String(state.weights.length);
@@ -316,16 +378,8 @@
       { label: "List", value: (r) => r.name },
       { label: "Status", value: (r) => r.is_archived ? "Archived" : "Active" }
     ], state.groceries, "No grocery lists yet.");
-    renderTable("workoutTable", [
-      { label: "Started", value: (r) => new Date(r.started_at).toLocaleString() },
-      { label: "Workout", value: (r) => r.title },
-      { label: "Notes", value: (r) => r.notes }
-    ], state.workouts, "No workout sessions yet.");
-    renderTable("fastingTable", [
-      { label: "Started", value: (r) => new Date(r.started_at).toLocaleString() },
-      { label: "Target", value: (r) => r.target_hours + " h" },
-      { label: "Ended", value: (r) => r.ended_at ? new Date(r.ended_at).toLocaleString() : "In progress" }
-    ], state.fastings, "No fasting sessions yet.");
+    renderTimedSessions("workoutTable", state.workouts, "workout");
+    renderTimedSessions("fastingTable", state.fastings, "fasting");
     renderTable("goalTable", [
       { label: "Goal", value: (r) => r.title },
       { label: "Metric", value: (r) => r.metric_key },
