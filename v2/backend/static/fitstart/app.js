@@ -152,17 +152,43 @@
       { label: "Weight", value: (r) => r.weight_kg + " kg" },
       { label: "Note", value: (r) => r.note }
     ], state.weights, "No weight entries yet.");
+    renderTable("measureTable", [
+      { label: "Measured", value: (r) => new Date(r.measured_at).toLocaleString() },
+      { label: "Waist", value: (r) => r.waist_cm == null ? "—" : r.waist_cm + " cm" },
+      { label: "Hips", value: (r) => r.hip_cm == null ? "—" : r.hip_cm + " cm" },
+      { label: "Chest", value: (r) => r.chest_cm == null ? "—" : r.chest_cm + " cm" }
+    ], state.measures, "No body measurements yet.");
     renderTable("foodTable", [
       { label: "Logged", value: (r) => new Date(r.logged_at).toLocaleString() },
       { label: "Food", value: (r) => r.food_name },
       { label: "Meal", value: (r) => r.meal_slot },
       { label: "Energy", value: (r) => r.calories_kcal == null ? "—" : r.calories_kcal + " kcal" }
     ], state.foods, "No food entries yet.");
+    renderTable("waterTable", [
+      { label: "Logged", value: (r) => new Date(r.logged_at).toLocaleString() },
+      { label: "Amount", value: (r) => r.amount_ml + " ml" }
+    ], state.waters, "No water entries yet.");
+    renderTable("mealTable", [
+      { label: "Date", value: (r) => r.plan_date },
+      { label: "Meal", value: (r) => r.meal_slot },
+      { label: "Plan", value: (r) => r.title },
+      { label: "Servings", value: (r) => r.servings }
+    ], state.meals, "No planned meals yet.");
+    renderTable("groceryTable", [
+      { label: "Week of", value: (r) => r.week_of },
+      { label: "List", value: (r) => r.name },
+      { label: "Status", value: (r) => r.is_archived ? "Archived" : "Active" }
+    ], state.groceries, "No grocery lists yet.");
     renderTable("workoutTable", [
       { label: "Started", value: (r) => new Date(r.started_at).toLocaleString() },
       { label: "Workout", value: (r) => r.title },
       { label: "Notes", value: (r) => r.notes }
     ], state.workouts, "No workout sessions yet.");
+    renderTable("fastingTable", [
+      { label: "Started", value: (r) => new Date(r.started_at).toLocaleString() },
+      { label: "Target", value: (r) => r.target_hours + " h" },
+      { label: "Ended", value: (r) => r.ended_at ? new Date(r.ended_at).toLocaleString() : "In progress" }
+    ], state.fastings, "No fasting sessions yet.");
     renderTable("goalTable", [
       { label: "Goal", value: (r) => r.title },
       { label: "Metric", value: (r) => r.metric_key },
@@ -245,6 +271,70 @@
     $("weightForm").reset();
     await refreshRecords();
     showStatus("weightStatus", "Weight entry saved.", "success");
+  });
+
+  bindForm("measureForm", async (form) => {
+    const body = {
+      waist_cm: form.get("waist_cm") || null,
+      hip_cm: form.get("hip_cm") || null,
+      chest_cm: form.get("chest_cm") || null,
+      household: optionalHouseholdValue("measureHousehold")
+    };
+    if (!body.household) delete body.household;
+    await api("/body-measurements/", { method: "POST", body });
+    $("measureForm").reset();
+    await refreshRecords();
+    showStatus("measureStatus", "Body measurement saved.", "success");
+  });
+
+  bindForm("waterForm", async (form) => {
+    const body = { amount_ml: Number(form.get("amount_ml")), household: optionalHouseholdValue("waterHousehold") };
+    if (!body.household) delete body.household;
+    await api("/water-entries/", { method: "POST", body });
+    $("waterForm").reset();
+    await refreshRecords();
+    showStatus("waterStatus", "Water entry saved.", "success");
+  });
+
+  bindForm("mealForm", async (form) => {
+    const body = {
+      plan_date: form.get("plan_date"),
+      meal_slot: form.get("meal_slot"),
+      title: form.get("title"),
+      servings: form.get("servings") || "1",
+      household: optionalHouseholdValue("mealHousehold")
+    };
+    if (!body.household) delete body.household;
+    await api("/meal-plan-entries/", { method: "POST", body });
+    $("mealForm").reset();
+    await refreshRecords();
+    showStatus("mealStatus", "Meal plan entry saved.", "success");
+  });
+
+  bindForm("groceryForm", async (form) => {
+    const body = {
+      name: form.get("name"),
+      week_of: form.get("week_of"),
+      household: optionalHouseholdValue("groceryHousehold")
+    };
+    if (!body.household) delete body.household;
+    await api("/grocery-lists/", { method: "POST", body });
+    $("groceryForm").reset();
+    await refreshRecords();
+    showStatus("groceryStatus", "Grocery list created.", "success");
+  });
+
+  bindForm("fastingForm", async (form) => {
+    const body = {
+      target_hours: form.get("target_hours"),
+      notes: form.get("notes"),
+      household: optionalHouseholdValue("fastingHousehold")
+    };
+    if (!body.household) delete body.household;
+    await api("/fasting-sessions/", { method: "POST", body });
+    $("fastingForm").reset();
+    await refreshRecords();
+    showStatus("fastingStatus", "Fasting session started.", "success");
   });
 
   bindForm("foodForm", async (form) => {
