@@ -190,6 +190,17 @@
             <div class="field"><label for="displayName">Display name</label><input id="displayName" name="display_name" maxlength="80"></div>
             <div class="field"><label for="unitSystem">Units</label><select id="unitSystem" name="unit_system"><option value="metric">Metric</option><option value="imperial">Imperial</option></select></div>
             <div class="field wide"><label for="timezoneName">Time zone (IANA)</label><input id="timezoneName" name="timezone_name" maxlength="64" placeholder="Europe/Berlin" required></div>
+            <div class="field"><label for="profileAge">Age</label><input id="profileAge" name="age" type="number" min="15" max="100" step="1" required></div>
+            <div class="field"><label for="profileGender">Gender (for energy estimate)</label><select id="profileGender" name="gender"><option value="male">Male</option><option value="female">Female</option><option value="other">Other</option></select></div>
+            <div class="field"><label for="profileHeight">Height (cm)</label><input id="profileHeight" name="height_cm" type="number" min="100" max="250" step="0.1" required></div>
+            <div class="field"><label for="profileStartWeight">Starting weight (kg)</label><input id="profileStartWeight" name="start_weight_kg" type="number" min="30" max="400" step="0.1" required></div>
+            <div class="field"><label for="profileCurrentWeight">Current weight (kg)</label><input id="profileCurrentWeight" name="current_weight_kg" type="number" min="30" max="400" step="0.1" required></div>
+            <div class="field"><label for="profileGoalWeight">Goal weight (kg)</label><input id="profileGoalWeight" name="goal_weight_kg" type="number" min="30" max="400" step="0.1" required></div>
+            <div class="field"><label for="profileActivity">Activity multiplier</label><input id="profileActivity" name="activity_multiplier" type="number" min="1" max="3" step="0.01" required></div>
+            <div class="field"><label for="profileDeficit">Daily calorie deficit (kcal)</label><input id="profileDeficit" name="daily_deficit_kcal" type="number" min="0" max="1500" step="1" required></div>
+            <div class="field"><label for="profileDiet">Diet type</label><select id="profileDiet" name="diet_type"><option value="balanced">Balanced</option><option value="vegetarian">Vegetarian</option><option value="vegan">Vegan</option><option value="keto">Keto</option><option value="paleo">Paleo</option><option value="mediterranean">Mediterranean</option><option value="low-carb">Low carb</option><option value="high-protein">High protein</option></select></div>
+            <div class="field"><label for="profileWorkoutMode">Workout location</label><select id="profileWorkoutMode" name="workout_mode"><option value="home">Home</option><option value="gym">Gym</option></select></div>
+            <div class="field"><label for="profileFitnessLevel">Fitness level</label><select id="profileFitnessLevel" name="fitness_level"><option value="beginner">Beginner</option><option value="intermediate">Intermediate</option><option value="advanced">Advanced</option></select></div>
             <div class="field wide"><label>Allow household sharing for these categories</label>
               <div class="checkgrid">
                 <label class="checkline"><input id="shareWeightHistory" type="checkbox" name="share_weight_history"> Weight history</label>
