@@ -7,6 +7,8 @@ from .views import (
     FastingSessionViewSet,
     FoodEntryViewSet,
     GoalViewSet,
+    GroceryItemDetailView,
+    GroceryItemListView,
     GroceryListViewSet,
     HealthView,
     HouseholdInvitationCreateView,
@@ -17,6 +19,8 @@ from .views import (
     WaterEntryViewSet,
     WeightEntryViewSet,
     WorkoutSessionViewSet,
+    WorkoutSetDetailView,
+    WorkoutSetListView,
 )
 
 router = DefaultRouter()
@@ -31,6 +35,10 @@ router.register("fasting-sessions", FastingSessionViewSet, basename="fasting-ses
 router.register("goals", GoalViewSet, basename="goal")
 
 urlpatterns = [
+    path("grocery-lists/<int:grocery_list_id>/items/", GroceryItemListView.as_view(), name="api-grocery-items"),
+    path("grocery-lists/<int:grocery_list_id>/items/<int:item_id>/", GroceryItemDetailView.as_view(), name="api-grocery-item-detail"),
+    path("workout-sessions/<int:session_id>/sets/", WorkoutSetListView.as_view(), name="api-workout-sets"),
+    path("workout-sessions/<int:session_id>/sets/<int:set_id>/", WorkoutSetDetailView.as_view(), name="api-workout-set-detail"),
     path("health/", HealthView.as_view(), name="api-health"),
     path("me/", MeView.as_view(), name="api-me"),
     path("profile/", MyProfileView.as_view(), name="api-profile"),
