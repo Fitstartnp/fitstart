@@ -30,6 +30,9 @@ class DashboardRenderTests(TestCase):
         self.assertContains(response, "groceryItemForm")
         self.assertContains(response, "workoutSetForm")
         self.assertContains(response, "fastingForm")
+        self.assertContains(response, "v1ImportForm")
+        self.assertContains(response, "confirmV1ImportButton")
+        self.assertContains(response, "profileAge")
         self.assertContains(response, "fitstart/app.js")
         self.assertContains(response, "fitstart/app.css")
 
