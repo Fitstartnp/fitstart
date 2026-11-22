@@ -1,6 +1,9 @@
 from django.conf import settings
 from django.contrib.auth import login
 from django.core.exceptions import PermissionDenied, ValidationError as DjangoValidationError
+from django.core.validators import validate_email
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect
 from django.core.mail import send_mail
 from django.db import connection, transaction
 from django.shortcuts import get_object_or_404
@@ -91,8 +94,10 @@ class HouseholdInvitationCreateView(APIView):
         household = get_object_or_404(Household, pk=household_id, archived_at__isnull=True)
         email = str(request.data.get("email", "")).strip().lower()
         role = str(request.data.get("role", HouseholdInvitation.Role.MEMBER)).strip().lower()
-        if not email or len(email) > 254 or "@" not in email:
-            raise ValidationError({"email": "Enter a valid email address."})
+        try:
+            validate_email(email)
+        except DjangoValidationError as exc:
+            raise ValidationError({"email": "Enter a valid email address."}) from exc
 
         try:
             invitation, raw_token = create_invitation(
@@ -141,6 +146,7 @@ class HouseholdInvitationCreateView(APIView):
         return Response({"detail": "Invitation sent."}, status=201)
 
 
+@method_decorator(csrf_protect, name="dispatch")
 class AcceptInvitationView(APIView):
     permission_classes = [permissions.AllowAny]
 
@@ -171,7 +177,6 @@ class AcceptInvitationView(APIView):
                 password = request.data.get("password")
                 if not isinstance(password, str) or not password:
                     raise ValidationError({"password": "Choose a password to create your FitStart account."})
-                new_user = User(email=invitation.invited_email, is_active=True)
                 try:
                     from django.contrib.auth.password_validation import validate_password
                     validate_password(password, user=new_user)
